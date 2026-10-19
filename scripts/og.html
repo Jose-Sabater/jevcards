@@ -1,0 +1,72 @@
+<!doctype html>
+<!-- The link preview (public/og.png, 1200 x 630), drawn in the game's own look. scripts/make-og.ts screenshots it. -->
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+@font-face { font-family: 'Bungee'; src: url('../node_modules/@fontsource/bungee/files/bungee-latin-400-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Barlow Condensed'; font-weight: 600; src: url('../node_modules/@fontsource/barlow-condensed/files/barlow-condensed-latin-600-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Barlow Condensed'; font-weight: 800; src: url('../node_modules/@fontsource/barlow-condensed/files/barlow-condensed-latin-800-normal.woff2') format('woff2'); }
+:root {
+  --stage-0: #070a2c; --stage: #121a6b; --stage-hi: #2a3fd6; --panel: #0d1452;
+  --gold: #ffd23a; --gold-deep: #b3420f; --bulb: #fff6c2; --you: #ff5b3a; --jev: #3affc4; --dim: #c9d1ff;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; }
+body {
+  position: relative;
+  font-family: 'Barlow Condensed', sans-serif;
+  color: #fff;
+  background:
+    conic-gradient(from 200deg at 14% -8%, transparent 0 10deg, rgba(255,255,255,.08) 10deg 26deg, transparent 26deg),
+    conic-gradient(from 134deg at 70% -8%, transparent 0 10deg, rgba(255,255,255,.08) 10deg 26deg, transparent 26deg),
+    radial-gradient(80% 90% at 40% 30%, var(--stage-hi) 0%, var(--stage) 50%, var(--stage-0) 100%);
+}
+.left { position: absolute; left: 64px; top: 70px; width: 620px; display: grid; gap: 26px; justify-items: start; }
+.eyebrow { margin: 0; font-weight: 800; font-size: 22px; letter-spacing: .24em; text-transform: uppercase; color: var(--dim); }
+.marquee {
+  position: relative; margin: 6px 0 0 10px; padding: 18px 34px 22px; border-radius: 22px;
+  font: 400 80px/1 'Bungee', sans-serif; color: var(--gold); background: var(--panel); white-space: nowrap;
+  text-shadow: 0 6px 0 var(--gold-deep);
+  box-shadow: 0 0 0 9px var(--gold), 0 0 0 15px var(--gold-deep), 0 24px 50px rgba(0,0,0,.5);
+}
+.marquee::before {
+  content: ''; position: absolute; inset: -14px; padding: 9px; border-radius: 32px; z-index: 1;
+  background: radial-gradient(circle, var(--bulb) 0 4px, rgba(255, 246, 194, 0.35) 5px, transparent 7px) 0 0 / 22px 22px;
+  -webkit-mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+.versus { display: flex; align-items: center; gap: 16px; margin-top: 10px; }
+.tag { font-weight: 800; font-size: 30px; letter-spacing: .12em; text-transform: uppercase; padding: 10px 22px 12px; border-radius: 12px 12px 4px 4px; color: var(--stage-0); }
+.tag.you { background: var(--you); } .tag.jev { background: var(--jev); }
+.vs { font: 400 38px/1 'Bungee', sans-serif; color: var(--gold); }
+.line { margin: 0; font-weight: 600; font-size: 34px; line-height: 1.15; color: #fff; }
+.line b { color: var(--gold); font-weight: 800; }
+.fan { position: absolute; right: 30px; top: 92px; width: 500px; height: 470px; }
+.fan figure { position: absolute; margin: 0; width: 310px; padding: 8px; background: #fff; border-radius: 16px;
+  box-shadow: 0 0 0 6px var(--gold), 0 0 0 10px var(--gold-deep), 0 26px 50px rgba(0,0,0,.55); }
+.fan img { display: block; width: 100%; border-radius: 10px; }
+.fan figure:nth-child(1) { left: 0; top: 30px; transform: rotate(-11deg); }
+.fan figure:nth-child(2) { left: 175px; top: 0; transform: rotate(9deg); }
+.fan figure:nth-child(3) { left: 85px; top: 200px; transform: rotate(-2deg); z-index: 2; }
+.timer { position: absolute; right: 70px; bottom: 44px; z-index: 3; width: 120px; height: 120px; border-radius: 50%;
+  display: grid; place-items: center; background: conic-gradient(var(--gold) 0 75%, rgba(255,255,255,.15) 0);
+  box-shadow: 0 12px 30px rgba(0,0,0,.5); }
+.timer span { position: absolute; inset: 12px; border-radius: 50%; background: var(--panel); display: grid; place-items: center; font: 400 26px/1 'Bungee', sans-serif; color: var(--gold); }
+</style>
+</head>
+<body>
+  <div class="left">
+    <p class="eyebrow">Live tonight: people against a model</p>
+    <div class="marquee">JEV CARDS</div>
+    <div class="versus"><span class="tag you">You</span><span class="vs">vs</span><span class="tag jev">Jev 1.14</span></div>
+    <p class="line">100 picture cards. Jev answers in <b>0.3&nbsp;s</b>.<br />Can you beat it?</p>
+  </div>
+  <div class="fan">
+    <figure><img src="../public/cards/flag-new-zealand.png" /></figure>
+    <figure><img src="../public/cards/chess-arabian-mate.png" /></figure>
+    <figure><img src="../public/cards/fruit-peach.png" /></figure>
+  </div>
+  <div class="timer"><span>0.3s</span></div>
+</body>
+</html>

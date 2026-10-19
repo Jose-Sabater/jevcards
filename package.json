@@ -1,0 +1,39 @@
+{
+  "name": "jev-cards",
+  "version": "0.1.0",
+  "description": "A visual quiz game: people against Jev, TypeSafe's vision decision model, on the same picture cards.",
+  "author": "Jose Sabater (https://jose.sabater.io)",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "start": "node server/main.ts",
+    "typecheck": "tsc",
+    "test": "node --test server/*.test.ts",
+    "deck": "node scripts/build-deck.ts",
+    "bench": "node scripts/bench.ts"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "devDependencies": {
+    "@types/d3-geo": "^3.1.1",
+    "@types/node": "^26.6.5",
+    "@types/topojson-client": "^3.1.5",
+    "puppeteer-core": "^25.14.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4"
+  },
+  "dependencies": {
+    "@fontsource/barlow-condensed": "^5.3.0",
+    "@fontsource/bungee": "^5.3.0",
+    "@fontsource/fraunces": "^5.3.0",
+    "@resvg/resvg-js": "^2.6.2",
+    "chess.js": "^1.4.0",
+    "d3-geo": "^3.1.1",
+    "topojson-client": "^3.1.0",
+    "world-atlas": "^2.0.2"
+  }
+}

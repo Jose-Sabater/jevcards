@@ -1,0 +1,10 @@
+node_modules
+dist
+.env
+*.log
+public/cards/deck-*.json
+scratch/
+data/
+# Full-size photo originals stay local; the cards are built from assets/objects/small/.
+assets/objects/*.png
+.DS_Store

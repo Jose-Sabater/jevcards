@@ -1,0 +1,2013 @@
+/*
+ * Prime Time: a TV quiz show. A spotlit blue stage, gold marquee bulbs around the card, LED podium scores
+ * and a countdown ring. You are red-orange, Jev is mint; the right answer is always gold.
+ */
+:root {
+  --stage-0: #070a2c;
+  --stage: #121a6b;
+  --stage-hi: #2a3fd6;
+  --panel: #0d1452;
+  --led-bg: #05071c;
+  --text: #ffffff;
+  --dim: #c9d1ff;
+  --faint: rgba(201, 209, 255, 0.18);
+  --gold: #ffd23a;
+  --gold-deep: #b3420f;
+  --bulb: #fff6c2;
+  --you: #ff5b3a;
+  --jev: #3affc4;
+  --jev-deep: #0aa57d;
+  /* Other players in a live match. */
+  --other: #7b5cff;
+  --show: 'Bungee', Impact, 'Arial Black', sans-serif;
+  --ui: 'Barlow Condensed', 'Arial Narrow', ui-sans-serif, sans-serif;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* hidden always hides, whatever display a class sets. */
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  color: var(--text);
+  font: 500 18px/1.4 var(--ui);
+  -webkit-font-smoothing: antialiased;
+  background-color: var(--stage-0);
+}
+
+/* The stage is a fixed layer rather than background-attachment: fixed, which phones draw badly. */
+body {
+  isolation: isolate;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    conic-gradient(from 200deg at 18% -8%, transparent 0 10deg, rgba(255, 255, 255, 0.07) 10deg 26deg, transparent 26deg),
+    conic-gradient(from 134deg at 82% -8%, transparent 0 10deg, rgba(255, 255, 255, 0.07) 10deg 26deg, transparent 26deg),
+    radial-gradient(70% 60% at 50% 22%, var(--stage-hi) 0%, var(--stage) 50%, var(--stage-0) 100%);
+}
+
+button,
+.card-frame {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+img {
+  -webkit-touch-callout: none;
+}
+
+button,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+#app {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: env(safe-area-inset-top, 0px) max(16px, env(safe-area-inset-right, 0px)) calc(56px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+}
+
+.loading {
+  text-align: center;
+  padding: 96px 0;
+  font: 400 24px/1.3 var(--show);
+  color: var(--gold);
+}
+
+/* ---------------------------------------------------------------- home */
+
+.home {
+  padding-top: 28px;
+  display: grid;
+  gap: 26px;
+}
+
+.hero {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 20px;
+}
+
+.eyebrow {
+  margin: 0;
+  font: 800 15px/1 var(--ui);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+h1 {
+  font: 400 clamp(36px, 9vw, 84px) / 1 var(--show);
+  margin: 0;
+  color: var(--gold);
+  text-shadow: 0 0.06em 0 var(--gold-deep), 0 0.12em 0.4em rgba(0, 0, 0, 0.5);
+}
+
+/* The title sign: a dark board ringed with chasing bulbs. */
+.marquee {
+  position: relative;
+  padding: 0.28em 0.5em 0.34em;
+  border-radius: 0.2em;
+  background: var(--panel);
+  box-shadow: 0 0 0 6px var(--gold), 0 0 0 10px var(--gold-deep), 0 18px 40px rgba(0, 0, 0, 0.5);
+}
+
+.marquee::before,
+.card::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  padding: 8px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(circle, var(--bulb) 0 3px, transparent 4px) 0 0 / 18px 18px;
+  -webkit-mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  animation: chase 0.9s steps(2) infinite;
+  z-index: 2;
+}
+
+@keyframes chase {
+  50% { background-position: 9px 0; }
+}
+
+.lede {
+  margin: 0;
+  max-width: 34em;
+  font-size: 20px;
+  color: var(--dim);
+}
+
+.fan {
+  position: relative;
+  margin-top: 16px;
+  width: min(100%, 520px);
+  height: clamp(150px, 30vw, 220px);
+}
+
+.fan img {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 52%;
+  aspect-ratio: 4 / 3;
+  background: #fff;
+  padding: 6px;
+  border-radius: 10px;
+  box-shadow: 0 0 0 4px var(--gold), 0 16px 30px rgba(0, 0, 0, 0.5);
+  transition: transform 0.3s cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+
+.fan img:nth-child(1) { transform: translate(-100%, -50%) rotate(-10deg); }
+.fan img:nth-child(2) { transform: translate(0%, -50%) rotate(10deg); }
+.fan img:nth-child(3) { transform: translate(-50%, -56%); z-index: 1; }
+.fan:hover img:nth-child(1) { transform: translate(-108%, -54%) rotate(-14deg); }
+.fan:hover img:nth-child(2) { transform: translate(8%, -54%) rotate(14deg); }
+.fan:hover img:nth-child(3) { transform: translate(-50%, -62%) scale(1.04); }
+
+.contestants {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+}
+
+.podium-mini {
+  font: 800 20px/1 var(--ui);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 10px 20px 11px;
+  border-radius: 10px 10px 4px 4px;
+  color: var(--stage-0);
+}
+
+.podium-mini.you { background: var(--you); }
+.podium-mini.jev { background: var(--jev); }
+
+.vs {
+  font: 400 26px/1 var(--show);
+  color: var(--gold);
+}
+
+.modes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+
+.mode {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+  padding: 18px 18px 16px;
+  border-radius: 16px;
+  border: 0;
+  background: linear-gradient(180deg, #1b2585, var(--panel));
+  box-shadow: inset 0 0 0 3px var(--gold), 0 6px 0 var(--gold-deep), 0 14px 30px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  transition: transform 0.14s cubic-bezier(0.3, 1.6, 0.5, 1), box-shadow 0.14s;
+}
+
+.mode:hover,
+.mode:focus-visible {
+  outline: none;
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: inset 0 0 0 3px var(--gold), 0 10px 0 var(--gold-deep), 0 0 40px rgba(255, 210, 58, 0.35);
+}
+
+.mode:active {
+  transform: translateY(3px);
+  box-shadow: inset 0 0 0 3px var(--gold), 0 2px 0 var(--gold-deep);
+}
+
+.mode-name {
+  font: 400 30px/1 var(--show);
+  color: var(--gold);
+}
+
+.mode-blurb {
+  flex: 1;
+  font-size: 18px;
+  color: var(--dim);
+}
+
+/* Live match: one wide banner under the three solo modes, in Jev's mint. */
+.mode-match {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 22px;
+  padding: 18px 22px;
+  background: linear-gradient(90deg, rgba(10, 165, 125, 0.35), var(--panel) 45%, var(--panel));
+  box-shadow: inset 0 0 0 3px var(--jev), 0 6px 0 var(--jev-deep), 0 14px 30px rgba(0, 0, 0, 0.45);
+}
+
+.mode-match:hover,
+.mode-match:focus-visible {
+  box-shadow: inset 0 0 0 3px var(--jev), 0 10px 0 var(--jev-deep), 0 0 40px rgba(58, 255, 196, 0.3);
+}
+
+.mode-match .mode-name {
+  color: var(--jev);
+}
+
+.mode-cta {
+  font: 400 16px/1 var(--show);
+  padding: 12px 16px;
+  border-radius: 12px;
+  color: var(--stage-0);
+  background: var(--jev);
+  white-space: nowrap;
+}
+
+.mode-best {
+  font: 800 14px/1 var(--ui);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--jev);
+}
+
+.settings {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px 24px;
+}
+
+.setting {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: 800 14px/1 var(--ui);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.setting select {
+  font: 600 18px/1.2 var(--ui);
+  letter-spacing: 0;
+  color: var(--text);
+  background: var(--led-bg);
+  border: 2px solid var(--faint);
+  border-radius: 8px;
+  padding: 5px 8px;
+  cursor: pointer;
+}
+
+.footnote {
+  text-align: center;
+  color: var(--dim);
+  opacity: 0.8;
+  font-size: 16px;
+  max-width: 620px;
+  margin: 0 auto;
+}
+
+.switch {
+  font: 800 14px/1 var(--ui);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 8px 12px 8px 30px;
+  border: 0;
+  border-radius: 99px;
+  cursor: pointer;
+  position: relative;
+  color: var(--dim);
+  background: var(--led-bg);
+  box-shadow: inset 0 0 0 2px var(--faint);
+}
+
+/* A bulb that is lit when the switch is on. */
+.switch::before {
+  content: '';
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.switch[aria-pressed='true'] {
+  color: var(--gold);
+  box-shadow: inset 0 0 0 2px var(--gold);
+}
+
+.switch[aria-pressed='true']::before {
+  background: var(--gold);
+  box-shadow: 0 0 8px var(--gold);
+}
+
+.switch:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.topbar .switch {
+  font-size: 12px;
+  padding: 6px 10px 6px 26px;
+}
+
+.topbar .switch::before {
+  left: 9px;
+}
+
+/* The maker's mark: JMS in Fraunces, as on jose.sabater.io. */
+.signature {
+  display: flex;
+  justify-content: center;
+  margin: 34px 0 6px;
+}
+
+.signature a {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: var(--dim);
+  text-decoration: none;
+  opacity: 0.75;
+  transition: opacity 0.2s, color 0.2s;
+}
+
+.signature a:hover,
+.signature a:focus-visible {
+  opacity: 1;
+  color: var(--gold);
+}
+
+.sig-mark {
+  font: 600 28px/1 'Fraunces', Georgia, serif;
+  letter-spacing: 0.04em;
+}
+
+.sig-text {
+  font: 600 13px/1 var(--ui);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/* ---------------------------------------------------------------- play */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 0 12px;
+}
+
+.topbar-title {
+  font: 400 24px/1 var(--show);
+  color: var(--gold);
+}
+
+.topbar-right {
+  margin-left: auto;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.clock,
+.led {
+  font: 400 26px/1 var(--show);
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: var(--led-bg);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.12);
+  font-variant-numeric: tabular-nums;
+}
+
+.clock {
+  color: var(--you);
+  text-shadow: 0 0 14px var(--you);
+  min-width: 4.6em;
+  text-align: right;
+}
+
+.count {
+  font: 800 16px/1 var(--ui);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.link {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  padding: 4px 0;
+  font: 800 15px/1 var(--ui);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+/* Touch screens keep :hover on the last thing tapped; only real pointers get it. */
+@media (hover: hover) {
+  .link:hover {
+    color: var(--gold);
+  }
+}
+
+/* The card: white, gold frame, chasing bulbs. */
+.card {
+  position: relative;
+  background: #fff;
+  color: var(--stage-0);
+  border-radius: 18px;
+  padding: 14px 16px 16px;
+  margin: 10px 8px 0;
+  box-shadow: 0 0 0 8px var(--gold), 0 0 0 12px var(--gold-deep), 0 24px 50px rgba(0, 0, 0, 0.55);
+  animation: deal 0.3s cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+
+.card::before {
+  inset: -14px;
+  padding: 6px;
+  border-radius: 26px;
+  background-size: 20px 20px;
+}
+
+@keyframes deal {
+  from { transform: translateY(24px) scale(0.92); opacity: 0; }
+}
+
+.card-head {
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.plate-no {
+  display: flex;
+  justify-content: space-between;
+  font: 800 13px/1 var(--ui);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #5b64a8;
+  margin-bottom: 8px;
+}
+
+.prompt {
+  margin: 0;
+  font: 400 clamp(20px, 4.4vw, 34px) / 1.1 var(--show);
+  color: var(--stage);
+  text-wrap: balance;
+}
+
+.card-frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgba(7, 10, 44, 0.08);
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.card-frame.kind-pick,
+.card-frame.kind-point {
+  cursor: crosshair;
+}
+
+.card.answered .card-frame {
+  cursor: default;
+}
+
+.card-frame.miss {
+  animation: nudge 0.25s;
+}
+
+@keyframes nudge {
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
+.card-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 960 / 720;
+}
+
+.card-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.card-overlay * {
+  vector-effect: non-scaling-stroke;
+}
+
+.mark-right {
+  fill: rgba(255, 210, 58, 0.18);
+  stroke: var(--gold);
+  stroke-width: 6;
+  filter: drop-shadow(0 0 6px rgba(255, 180, 0, 0.8));
+}
+
+.mark-you-wrong {
+  fill: rgba(255, 91, 58, 0.14);
+  stroke: var(--you);
+  stroke-width: 4;
+  stroke-dasharray: 10 7;
+}
+
+.mark-jev-wrong {
+  fill: rgba(10, 165, 125, 0.14);
+  stroke: var(--jev-deep);
+  stroke-width: 4;
+  stroke-dasharray: 10 7;
+}
+
+.mark-jev-box {
+  fill: rgba(10, 165, 125, 0.16);
+  stroke: var(--jev-deep);
+  stroke-width: 4;
+}
+
+.dot-you,
+.dot-jev {
+  stroke: #fff;
+  stroke-width: 3;
+}
+
+.dot-you { fill: var(--you); }
+.dot-jev { fill: var(--jev-deep); }
+
+.label rect { stroke: #fff; stroke-width: 2; }
+.label-you rect { fill: var(--you); }
+.label-jev rect { fill: var(--jev-deep); }
+.label-other rect { fill: var(--other); }
+
+/* Other players' taps in a live match: smaller dots with their names. */
+.dot-other {
+  fill: var(--other);
+  stroke: #fff;
+  stroke-width: 2;
+}
+
+.dot-name {
+  font: 800 0.024px var(--ui);
+  text-transform: uppercase;
+  fill: #fff;
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: var(--stage-0);
+  stroke-width: 0.006px;
+}
+.label text {
+  font: 800 0.026px var(--ui);
+  text-transform: uppercase;
+  fill: #fff;
+  text-anchor: middle;
+}
+
+.answer-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.answer-row:empty {
+  display: none;
+}
+
+.answer-btn {
+  position: relative;
+  padding: 14px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--stage);
+  color: #fff;
+  font: 800 22px/1.1 var(--ui);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 5px 0 var(--stage-0);
+  transition: transform 0.08s, box-shadow 0.08s, background 0.1s;
+}
+
+/* Touch screens keep :hover on the last thing tapped; only real pointers get it. */
+@media (hover: hover) {
+  .answer-btn:hover:not(:disabled) {
+    background: var(--stage-hi);
+  }
+}
+
+.answer-btn:active:not(:disabled) {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 var(--stage-0);
+}
+
+.answer-btn:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.answer-btn.right {
+  background: var(--gold);
+  color: var(--stage-0);
+  box-shadow: 0 5px 0 var(--gold-deep), 0 0 24px rgba(255, 210, 58, 0.7);
+  opacity: 1;
+}
+
+.answer-btn.wrong {
+  opacity: 1;
+  text-decoration: line-through;
+  text-decoration-thickness: 3px;
+}
+
+.tags {
+  position: absolute;
+  top: -12px;
+  right: 8px;
+  display: flex;
+  gap: 4px;
+}
+
+.tag {
+  font: normal 800 13px/1.5 var(--ui);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0 9px;
+  border-radius: 99px;
+  color: #fff;
+  border: 2px solid #fff;
+}
+
+.tag-you { background: var(--you); }
+.tag-jev { background: var(--jev-deep); }
+.tag-other { background: var(--other); }
+
+.flash {
+  position: absolute;
+  top: 46%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-5deg);
+  font: 400 54px/1 var(--show);
+  padding: 14px 30px;
+  border-radius: 18px;
+  pointer-events: none;
+  z-index: 3;
+  animation: zing 0.32s cubic-bezier(0.3, 1.8, 0.5, 1);
+}
+
+.flash.ok {
+  color: var(--gold);
+  background: var(--stage-0);
+  box-shadow: 0 0 0 4px var(--gold), 0 14px 30px rgba(0, 0, 0, 0.5);
+  text-shadow: 0 4px 0 var(--gold-deep);
+}
+
+.flash.no {
+  color: #fff;
+  background: var(--you);
+  box-shadow: 0 0 0 4px #fff, 0 14px 30px rgba(0, 0, 0, 0.5);
+}
+
+@keyframes zing {
+  from { transform: translate(-50%, -50%) rotate(-5deg) scale(0.3); opacity: 0; }
+}
+
+.explain {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 2px dashed rgba(7, 10, 44, 0.15);
+}
+
+.explain p {
+  margin: 8px 0 14px;
+  font-size: 19px;
+  color: #2a3266;
+}
+
+.explain-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+}
+
+.who {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font: 600 18px/1.2 var(--ui);
+}
+
+.verdict {
+  font: 800 13px/1 var(--ui);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  padding: 4px 9px;
+  border-radius: 99px;
+  color: #fff;
+}
+
+.verdict.ok { background: var(--gold); color: var(--stage-0); }
+.verdict.no { background: var(--you); }
+.verdict.none { background: #8089b8; }
+
+.primary,
+.secondary {
+  padding: 14px 26px 13px;
+  border-radius: 14px;
+  font: 400 18px/1 var(--show);
+  cursor: pointer;
+  border: 0;
+  transition: transform 0.08s, box-shadow 0.08s;
+}
+
+.primary {
+  background: var(--gold);
+  color: var(--stage-0);
+  box-shadow: 0 5px 0 var(--gold-deep);
+}
+
+/* Touch screens keep :hover on the last thing tapped; only real pointers get it. */
+@media (hover: hover) {
+  .primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 7px 0 var(--gold-deep), 0 0 26px rgba(255, 210, 58, 0.5);
+  }
+}
+
+.primary:active {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 var(--gold-deep);
+}
+
+.secondary {
+  background: transparent;
+  color: var(--dim);
+  box-shadow: inset 0 0 0 2px var(--faint);
+}
+
+/* Touch screens keep :hover on the last thing tapped; only real pointers get it. */
+@media (hover: hover) {
+  .secondary:hover {
+    color: var(--text);
+    box-shadow: inset 0 0 0 2px var(--dim);
+  }
+}
+
+/* The opening: "Contestants... Ready?" then 3, 2, 1, GO. */
+.get-ready {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  /* Room for the number's gold rings (12px) and its pop. */
+  gap: 40px;
+  min-height: min(60svh, 460px);
+  text-align: center;
+}
+
+.ready-line {
+  margin: 0;
+  font: 800 22px/1 var(--ui);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.ready-big {
+  display: grid;
+  place-items: center;
+  min-width: 2.2em;
+  height: 2.2em;
+  padding: 0 0.3em;
+  border-radius: 999px;
+  font: 400 clamp(64px, 16vw, 128px) / 1 var(--show);
+  color: var(--gold);
+  background: var(--panel);
+  box-shadow: 0 0 0 8px var(--gold), 0 0 0 12px var(--gold-deep), 0 24px 50px rgba(0, 0, 0, 0.55);
+  text-shadow: 0 0.06em 0 var(--gold-deep);
+  animation: count-pop 0.45s cubic-bezier(0.3, 1.8, 0.5, 1);
+}
+
+.ready-big.go {
+  color: var(--stage-0);
+  background: var(--gold);
+  text-shadow: none;
+  box-shadow: 0 0 0 8px #fff, 0 0 60px rgba(255, 210, 58, 0.8);
+}
+
+@keyframes count-pop {
+  from { transform: scale(0.4); opacity: 0; }
+}
+
+/* Versus: two podiums with the countdown ring between them. */
+.podiums {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.podiums.solo {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  margin-bottom: 18px;
+}
+
+.podium {
+  display: grid;
+  justify-items: start;
+}
+
+.podium.jev {
+  justify-items: end;
+}
+
+.podium-who {
+  font: 800 15px/1 var(--ui);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 6px 12px;
+  border-radius: 8px 8px 0 0;
+  color: var(--stage-0);
+}
+
+.podium.you .podium-who { background: var(--you); }
+.podium.jev .podium-who { background: var(--jev); }
+.podium .led { font-size: 34px; padding: 8px 16px; min-width: 3.2em; text-align: center; }
+.podium.you .led { color: var(--you); text-shadow: 0 0 14px var(--you); border-top-left-radius: 0; }
+.podium.jev .led { color: var(--jev); text-shadow: 0 0 14px var(--jev); border-top-right-radius: 0; }
+
+.ring {
+  --left: 1;
+  position: relative;
+  width: 74px;
+  height: 74px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: conic-gradient(var(--gold) calc(var(--left) * 360deg), rgba(255, 255, 255, 0.12) 0);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+}
+
+.ring span {
+  position: absolute;
+  inset: 8px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--panel);
+  font: 400 28px/1 var(--show);
+  color: var(--gold);
+}
+
+.ring.hurry {
+  background: conic-gradient(var(--you) calc(var(--left) * 360deg), rgba(255, 255, 255, 0.12) 0);
+  animation: throb 0.5s ease-in-out infinite alternate;
+}
+
+.ring.hurry span { color: var(--you); }
+
+@keyframes throb {
+  to { transform: scale(1.07); }
+}
+
+.jev-chip {
+  margin: 8px 0 20px;
+  text-align: center;
+  font: 800 17px/1.2 var(--ui);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.jev-chip.thinking::after {
+  content: '';
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-left: 8px;
+  border-radius: 50%;
+  background: var(--jev);
+  animation: blink 0.7s infinite;
+}
+
+.jev-chip.done { color: var(--jev); }
+.jev-chip.error { color: var(--you); }
+
+@keyframes blink {
+  50% { opacity: 0.2; }
+}
+
+/* Sprint: a light board, one bulb per card, for you and Jev's ghost. */
+.race {
+  display: grid;
+  gap: 8px;
+  padding: 10px 14px;
+  margin-bottom: 22px !important;
+  border-radius: 12px;
+  background: var(--led-bg);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.08);
+}
+
+.lane {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.lane-name {
+  width: 74px;
+  flex: none;
+  font: 800 14px/1 var(--ui);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lane-you .lane-name { color: var(--you); }
+.lane-jev .lane-name { color: var(--jev); }
+
+.pips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+}
+
+.pip {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  transition: background 0.15s, box-shadow 0.15s;
+}
+
+.lane-you .pip.now { box-shadow: 0 0 0 2px var(--you); }
+.lane-jev .pip.now { box-shadow: 0 0 0 2px var(--jev); animation: blink 0.7s infinite; }
+.lane-you .pip.ok { background: var(--you); box-shadow: 0 0 8px var(--you); }
+.lane-jev .pip.ok { background: var(--jev); box-shadow: 0 0 8px var(--jev); }
+.pip.no { background: #3a2140; box-shadow: inset 0 0 0 2px #ff3a6e; }
+
+.lane-status {
+  margin-left: auto;
+  font: 600 15px/1 var(--ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ghost-done .lane-status {
+  color: var(--jev);
+}
+
+/* ---------------------------------------------------------------- results */
+
+.results {
+  text-align: center;
+  padding-top: 10px;
+}
+
+.result-title {
+  font-size: clamp(32px, 8vw, 62px);
+  margin: 14px 0 26px;
+}
+
+.scores {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  max-width: 600px;
+  margin: 0 auto;
+  align-items: end;
+}
+
+.score-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 12px 20px;
+  border-radius: 16px 16px 6px 6px;
+  background: linear-gradient(180deg, #1b2585, var(--panel));
+}
+
+.score-box.winner {
+  padding-top: 34px;
+  box-shadow: inset 0 0 0 3px var(--gold), 0 0 40px rgba(255, 210, 58, 0.35);
+}
+
+.score-who {
+  font: 800 16px/1 var(--ui);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 6px 12px;
+  border-radius: 8px;
+  color: var(--stage-0);
+}
+
+.score-box.you .score-who { background: var(--you); }
+.score-box.jev .score-who { background: var(--jev); }
+
+.score-big {
+  font: 400 48px/1 var(--show);
+  font-variant-numeric: tabular-nums;
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: var(--led-bg);
+}
+
+.score-box.you .score-big { color: var(--you); text-shadow: 0 0 16px var(--you); }
+.score-box.jev .score-big { color: var(--jev); text-shadow: 0 0 16px var(--jev); }
+
+.score-small {
+  color: var(--dim);
+  font-size: 17px;
+}
+
+/* Leaderboards: an LED board of initials and scores. */
+.leaderboard {
+  width: 100%;
+  max-width: 600px;
+  margin: 26px auto 0;
+  padding: 16px 16px 14px;
+  border-radius: 18px;
+  background: rgba(5, 7, 28, 0.7);
+  box-shadow: inset 0 0 0 3px var(--gold), 0 0 40px rgba(255, 210, 58, 0.15);
+  text-align: left;
+}
+
+.leaderboard.unranked {
+  box-shadow: inset 0 0 0 2px var(--faint);
+}
+
+.lb-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.lb-badge {
+  font: 400 18px/1 var(--show);
+  color: var(--gold);
+}
+
+.lb-meta,
+.lb-status {
+  font: 600 15px/1.3 var(--ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.lb-status {
+  margin: 10px 0 8px;
+  overflow-wrap: anywhere;
+}
+
+.lb-table {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.lb-table li {
+  display: grid;
+  grid-template-columns: 3em minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  font-variant-numeric: tabular-nums;
+}
+
+.lb-table li.me {
+  background: var(--you);
+  color: var(--stage-0);
+  animation: land 0.35s cubic-bezier(0.3, 1.8, 0.5, 1);
+}
+
+.lb-table li.lb-empty {
+  display: block;
+  color: var(--dim);
+  font-size: 16px;
+}
+
+.lb-place {
+  font: 800 15px/1 var(--ui);
+  color: var(--dim);
+}
+
+.lb-table li.me .lb-place {
+  color: var(--stage-0);
+}
+
+.lb-name {
+  font: 400 22px/1 var(--show);
+  letter-spacing: 0.08em;
+}
+
+.lb-score {
+  font: 400 18px/1 var(--show);
+  color: var(--gold);
+}
+
+.lb-table li.me .lb-score {
+  color: var(--stage-0);
+}
+
+.lb-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0 10px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(255, 91, 58, 0.15);
+  box-shadow: inset 0 0 0 2px var(--you);
+}
+
+.lb-form label {
+  flex-basis: 100%;
+  font: 800 17px/1.2 var(--ui);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lb-initials {
+  width: 4.2em;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--led-bg);
+  color: var(--you);
+  font: 400 30px/1 var(--show);
+  letter-spacing: 0.12em;
+  text-align: center;
+  text-transform: uppercase;
+  box-shadow: inset 0 0 0 2px var(--you);
+}
+
+.lb-initials:focus {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.lb-share,
+.share-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.share-note {
+  font: 600 15px/1.3 var(--ui);
+  color: var(--jev);
+  overflow-wrap: anywhere;
+}
+
+.home-links {
+  display: flex;
+  justify-content: center;
+}
+
+.lb-grid {
+  display: grid;
+  gap: 0;
+}
+
+.share-page .eyebrow {
+  margin-top: 18px;
+}
+
+.play-row {
+  margin-top: 22px;
+}
+
+.play-yourself {
+  font-size: 22px;
+  padding: 18px 30px 17px;
+  animation: throb 0.9s ease-in-out infinite alternate;
+}
+
+/* How Jev plays: three facts, then the live example. */
+.how {
+  max-width: 820px;
+  margin: 0 auto;
+}
+
+.how-facts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 30px;
+  text-align: left;
+}
+
+.how-fact {
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(5, 7, 28, 0.6);
+  box-shadow: inset 0 0 0 2px var(--jev);
+}
+
+.how-fact h3 {
+  margin: 0 0 8px;
+  font: 400 18px/1.15 var(--show);
+  color: var(--jev);
+}
+
+.how-fact p,
+.how-text {
+  margin: 0;
+  color: var(--dim);
+  font-size: 18px;
+}
+
+.how-text {
+  text-align: left;
+  margin-bottom: 18px;
+}
+
+.how-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 30px 0 10px;
+  font: 400 26px/1.1 var(--show);
+  color: var(--gold);
+  text-align: left;
+}
+
+.how-step span {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 50%;
+  font-size: 20px;
+  color: var(--stage-0);
+  background: var(--gold);
+}
+
+.how-example {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.how-card .card {
+  margin: 10px 8px;
+  animation: none;
+}
+
+.how-request {
+  min-width: 0;
+  text-align: left;
+}
+
+.how-json {
+  margin: 8px 0 0;
+  padding: 14px;
+  max-height: 420px;
+  overflow: auto;
+  border-radius: 12px;
+  background: var(--led-bg);
+  color: #c9f5e6;
+  font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.how-actions {
+  justify-content: flex-start;
+  margin-top: 4px;
+}
+
+.how-answer {
+  margin-top: 16px;
+  text-align: left;
+}
+
+.how-note {
+  color: var(--dim);
+  font-size: 16px;
+}
+
+.how-note.thinking {
+  color: var(--jev);
+  animation: blink 0.9s infinite;
+}
+
+.how-verdict {
+  font: 400 22px/1 var(--show);
+  margin: 0 0 12px;
+}
+
+.how-verdict.ok { color: var(--jev); }
+.how-verdict.no { color: var(--you); }
+
+.how-probs {
+  max-width: 520px;
+}
+
+@media (max-width: 700px) {
+  .how-facts,
+  .how-example {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Live match: the lobby, the players' chips, and each card's podium. */
+.lobby {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  padding-top: 16px;
+  text-align: center;
+}
+
+.marquee.code {
+  font-size: clamp(48px, 14vw, 88px);
+  letter-spacing: 0.12em;
+  margin: 4px 0 8px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.match-strip .chips {
+  margin-bottom: 12px;
+}
+
+.chip-player {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  font: 400 18px/1 var(--show);
+  letter-spacing: 0.06em;
+  color: var(--text);
+  background: var(--panel);
+  box-shadow: inset 0 0 0 2px var(--faint);
+  transition: background 0.15s, box-shadow 0.15s;
+}
+
+.chip-player.me {
+  box-shadow: inset 0 0 0 2px var(--you);
+}
+
+.chip-player.jev {
+  color: var(--jev);
+  box-shadow: inset 0 0 0 2px var(--jev);
+}
+
+.chip-player.done {
+  background: var(--you);
+  color: var(--stage-0);
+}
+
+.chip-player.jev.done {
+  background: var(--jev);
+  color: var(--stage-0);
+}
+
+.chip-player.away {
+  opacity: 0.45;
+}
+
+.host-tag {
+  font: normal 800 11px/1 var(--ui);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 3px 6px;
+  border-radius: 6px;
+  color: var(--stage-0);
+  background: var(--gold);
+}
+
+.match-form {
+  max-width: 600px;
+  margin: 18px auto 0;
+}
+
+.code-input {
+  width: 5.2em;
+}
+
+.chip-player.ready {
+  background: var(--jev);
+  color: var(--stage-0);
+  box-shadow: inset 0 0 0 2px var(--jev);
+}
+
+.ready-tag {
+  font: normal 800 11px/1 var(--ui);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.ready-box {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+
+.ready-btn.is-ready {
+  background: var(--jev);
+  box-shadow: 0 5px 0 var(--jev-deep);
+}
+
+.play-yourself.waiting {
+  animation: none;
+}
+
+.rounds-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* A name: room for all 12 characters, in a calmer type than the arcade initials. */
+.name-field {
+  position: relative;
+  flex: 1 1 15ch;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.name-input {
+  width: 100%;
+  padding: 12px 58px 12px 14px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--led-bg);
+  color: var(--you);
+  font: 800 24px/1.1 var(--ui);
+  letter-spacing: 0.02em;
+  box-shadow: inset 0 0 0 2px var(--you);
+}
+
+.name-input::placeholder {
+  color: var(--dim);
+  opacity: 0.6;
+}
+
+.name-input:focus {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.name-count {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font: 600 14px/1 var(--ui);
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.flash.wait {
+  color: var(--gold);
+  background: var(--stage-0);
+  box-shadow: 0 0 0 4px var(--gold), 0 14px 30px rgba(0, 0, 0, 0.5);
+  font-size: 34px;
+}
+
+.round-podium {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 2px dashed rgba(7, 10, 44, 0.15);
+}
+
+.round-podium .lb-badge {
+  margin: 0 0 6px;
+  color: var(--stage);
+}
+
+.round-podium .lb-table li {
+  background: rgba(7, 10, 44, 0.06);
+  color: var(--stage-0);
+}
+
+.round-podium .lb-table li.me {
+  background: var(--you);
+}
+
+.round-podium .lb-table li.jev-row,
+.lb-table li.jev-row {
+  background: var(--jev);
+  color: var(--stage-0);
+}
+
+.round-podium .lb-place,
+.round-podium .lb-score {
+  color: inherit;
+}
+
+.lb-table li.jev-row .lb-place,
+.lb-table li.jev-row .lb-score {
+  color: var(--stage-0);
+}
+
+/* Jev's last word: the line Jev chose, big, and every line it could have picked. */
+.last-word {
+  width: 100%;
+  max-width: 600px;
+  margin: 26px auto 0;
+  padding: 18px 18px 16px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(10, 165, 125, 0.22), rgba(5, 7, 28, 0.6));
+  box-shadow: inset 0 0 0 3px var(--jev), 0 0 40px rgba(58, 255, 196, 0.18);
+  text-align: left;
+}
+
+.lw-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.lw-badge {
+  font: 800 15px/1 var(--ui);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 7px 12px;
+  border-radius: 8px;
+  color: var(--stage-0);
+  background: var(--jev);
+}
+
+.lw-meta {
+  font: 600 15px/1.2 var(--ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+/* The chosen line, as a speech bubble from Jev. */
+.lw-quote {
+  position: relative;
+  margin: 16px 0 18px;
+  padding: 16px 20px;
+  border-radius: 16px;
+  font: 400 clamp(22px, 5vw, 34px) / 1.15 var(--show);
+  color: var(--stage-0);
+  background: var(--jev);
+  text-wrap: balance;
+}
+
+.lw-quote::after {
+  content: '';
+  position: absolute;
+  left: 28px;
+  top: -12px;
+  border: 12px solid transparent;
+  border-top: 0;
+  border-bottom-color: var(--jev);
+}
+
+.last-word.done .lw-quote {
+  animation: zing-quote 0.4s cubic-bezier(0.3, 1.8, 0.5, 1);
+}
+
+@keyframes zing-quote {
+  from { transform: scale(0.6) rotate(-3deg); opacity: 0; }
+}
+
+.lw-quote.quiet {
+  font: 600 19px/1.3 var(--ui);
+  color: var(--dim);
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--faint);
+}
+
+.lw-quote,
+.explain p,
+.who {
+  overflow-wrap: anywhere;
+}
+
+.lw-quote.thinking {
+  font: 800 18px/1.3 var(--ui);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--jev);
+  background: transparent;
+  box-shadow: inset 0 0 0 2px rgba(58, 255, 196, 0.4);
+  animation: blink 0.9s infinite;
+}
+
+.lw-options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.lw-options li {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(60px, 1fr) 3em;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  font: 600 17px/1.2 var(--ui);
+  color: var(--dim);
+}
+
+.lw-options li.lit {
+  color: var(--text);
+  background: rgba(58, 255, 196, 0.22);
+  box-shadow: inset 0 0 0 2px var(--jev);
+}
+
+.lw-options li.chosen {
+  color: var(--stage-0);
+  background: var(--jev);
+  font-weight: 800;
+  animation: land 0.35s cubic-bezier(0.3, 1.8, 0.5, 1);
+}
+
+@keyframes land {
+  from { transform: scale(1.06); }
+}
+
+.lw-track {
+  height: 8px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.lw-bar {
+  display: block;
+  height: 100%;
+  width: calc(var(--p, 0) * 100%);
+  border-radius: 99px;
+  background: var(--jev);
+  transition: width 0.6s ease-out;
+}
+
+.lw-options li.chosen .lw-track { background: rgba(5, 7, 28, 0.2); }
+.lw-options li.chosen .lw-bar { background: var(--stage-0); }
+
+.lw-pct {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.lw-again {
+  margin-top: 14px;
+  font-size: 14px;
+  padding: 10px 16px;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  margin: 28px auto 0;
+  max-width: 600px;
+  border-radius: 12px;
+  background: rgba(5, 7, 28, 0.55);
+}
+
+.card-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 17px;
+  text-align: left;
+}
+
+.card-table th {
+  font: 800 13px/1 var(--ui);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.card-table th,
+.card-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--faint);
+}
+
+.card-table td.ok { color: var(--jev); }
+.card-table td.no { color: var(--you); }
+.card-table small { color: var(--dim); }
+
+.actions {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  margin-top: 30px;
+}
+
+@media (max-width: 700px) {
+  .modes {
+    grid-template-columns: 1fr;
+  }
+  .mode-name {
+    font-size: 26px;
+  }
+  .mode-match {
+    grid-template-columns: 1fr;
+    justify-items: start;
+    padding: 16px 18px;
+  }
+  .fan img {
+    width: 46%;
+  }
+  .card {
+    padding: 10px 10px 12px;
+    margin: 8px 6px 0;
+    box-shadow: 0 0 0 5px var(--gold), 0 0 0 8px var(--gold-deep), 0 16px 30px rgba(0, 0, 0, 0.5);
+  }
+  .card::before {
+    inset: -10px;
+    padding: 5px;
+    background-size: 16px 16px;
+  }
+  .podium .led {
+    font-size: 24px;
+    padding: 8px 10px;
+  }
+  .ring {
+    width: 60px;
+    height: 60px;
+  }
+  .ring span {
+    inset: 7px;
+    font-size: 22px;
+  }
+  .lane {
+    flex-wrap: wrap;
+    gap: 6px 10px;
+  }
+  .lane-status {
+    margin-left: 86px;
+    width: 100%;
+  }
+  .score-big {
+    font-size: 34px;
+  }
+  .clock {
+    font-size: 20px;
+  }
+  .flash {
+    font-size: 36px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Phones: a compact cover so the games are near the top, a top bar that fits, and as much picture as possible. */
+@media (max-width: 480px) {
+  #app {
+    padding-left: max(10px, env(safe-area-inset-left, 0px));
+    padding-right: max(10px, env(safe-area-inset-right, 0px));
+  }
+  .home {
+    padding-top: 16px;
+    gap: 18px;
+  }
+  .hero {
+    gap: 12px;
+  }
+  .eyebrow {
+    font-size: 12px;
+  }
+  .fan {
+    height: 118px;
+    margin-top: 6px;
+  }
+  .fan img {
+    width: 40%;
+  }
+  .lede {
+    font-size: 16px;
+  }
+  .podium-mini {
+    font-size: 16px;
+    padding: 8px 14px 9px;
+  }
+  .mode {
+    padding: 14px 14px 12px;
+    gap: 6px;
+  }
+  .mode-name {
+    font-size: 24px;
+  }
+  .mode-blurb {
+    font-size: 16px;
+  }
+  .settings {
+    gap: 10px 16px;
+  }
+  .topbar {
+    gap: 10px;
+    padding: 10px 0 8px;
+  }
+  .topbar .link-label,
+  .topbar .switch-label {
+    display: none;
+  }
+  .link {
+    font-size: 22px;
+    padding: 4px 6px 4px 0;
+  }
+  .topbar-title {
+    font-size: 19px;
+  }
+  .topbar-right {
+    gap: 10px;
+  }
+  .count {
+    font-size: 14px;
+  }
+  .clock {
+    font-size: 18px;
+    min-width: 0;
+    padding: 6px 10px;
+  }
+  .topbar .switch {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+  }
+  .topbar .switch::before {
+    left: 50%;
+    margin-left: -5px;
+  }
+  .card {
+    margin: 6px 4px 0;
+    padding: 8px 8px 10px;
+  }
+  .card-head {
+    margin-bottom: 8px;
+  }
+  .plate-no {
+    margin-bottom: 6px;
+    font-size: 11px;
+  }
+  .answer-row {
+    gap: 8px;
+    margin-top: 10px;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  }
+  .answer-btn {
+    font-size: 19px;
+    padding: 12px 8px;
+  }
+  .race {
+    padding: 8px 10px;
+    margin-bottom: 14px !important;
+  }
+  .podium-who {
+    font-size: 13px;
+    padding: 5px 9px;
+  }
+  .jev-chip {
+    font-size: 14px;
+    margin: 6px 0 14px;
+  }
+  .last-word {
+    padding: 14px 12px 12px;
+  }
+  .lw-options li {
+    grid-template-columns: minmax(0, 1fr) 54px 2.6em;
+    font-size: 15px;
+    gap: 8px;
+  }
+  .actions {
+    flex-wrap: wrap;
+  }
+}
+
+/* Keep the whole card (prompt, picture, buttons) on screen: on wide screens the height decides its width. */
+.stage,
+.race {
+  max-width: min(100%, calc((100svh - 400px) * 4 / 3 + 32px));
+  min-width: min(100%, 460px);
+  margin: 0 auto;
+}
+
+/* An invite link: "Or host your own match" under the join form. */
+.own-wrap {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+}
+
+.own-match {
+  font-size: 16px;
+  color: var(--dim);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* The host's "End match" in the top bar. */
+.end-match {
+  font-size: 15px;
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+/* An option only other players picked: still readable, so their tag shows. */
+.answer-btn:disabled:has(.tag-other) {
+  opacity: 0.75;
+}
