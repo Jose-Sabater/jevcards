@@ -5,7 +5,8 @@
  * podium, and the final standings with Jev's last word.
  */
 import type { Card } from '../cards/lib.ts';
-import type { JevAnswer } from './api.ts';
+import { learn, type JevAnswer } from './api.ts';
+import type { Solution } from '../shared/game.ts';
 import { el, sleep, store } from './dom.ts';
 import { shareButton } from './ranked.ts';
 import { beep, effect, hush, jevSays, say } from './sound.ts';
@@ -57,6 +58,8 @@ interface RoomView {
     mine: RoundAnswer | null;
     answers: Record<string, RoundAnswer> | null;
     jevAnswer: { right: boolean; ms: number; points: number; choice?: string; box?: JevAnswer['box'] } | null;
+    /** At the reveal: the card's answer and why (the page's deck has none). */
+    solution: Solution | null;
   } | null;
   taunt: string | null;
   serverNow: number;
@@ -448,8 +451,10 @@ function follow(ctx: MatchContext, code: string, token: string): void {
     const v = view!;
     v.timeout();
     v.root.querySelector('.flash')?.remove();
+    if (r.solution) learn(v.card, r.solution);
+    // Right or wrong is the server's word: the page cannot mark an answer itself.
     const me = r.mine;
-    const you: PlayerAnswer | null = mine ?? (me ? { option: me.option, point: me.point ? { x: me.point[0], y: me.point[1] } : undefined, correct: me.right, ms: me.ms } : null);
+    const you: PlayerAnswer | null = mine ? { ...mine, correct: !!me?.right } : me ? { option: me.option, point: me.point ? { x: me.point[0], y: me.point[1] } : undefined, correct: me.right, ms: me.ms } : null;
     const jev = r.jevAnswer ? ({ choice: r.jevAnswer.choice, box: r.jevAnswer.box, correct: r.jevAnswer.right, latencyMs: r.jevAnswer.ms } as JevAnswer) : null;
     const others: OtherAnswer[] = s.players
       .filter((p) => p.id !== s.me && r.answers?.[p.id])

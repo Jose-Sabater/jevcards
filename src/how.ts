@@ -5,7 +5,8 @@
  * "Ask Jev now" makes a real call.
  */
 import type { Card } from '../cards/lib.ts';
-import { askJev, type JevAnswer } from './api.ts';
+import { askJev, learn, type JevAnswer } from './api.ts';
+import { HOW_EXAMPLES } from '../shared/game.ts';
 import { el } from './dom.ts';
 import type { CardView } from './view.ts';
 
@@ -19,7 +20,7 @@ export interface HowContext {
 }
 
 /** Cards that show the idea well: a photo pick, a drawn trap, a map tap. */
-const EXAMPLES = ['fruit-peach', 'stroop-ink', 'map-egypt', 'big-cat-cheetah', 'flag-sweden', 'chess-mate-piece'];
+const EXAMPLES = HOW_EXAMPLES;
 
 export function howItWorks(ctx: HowContext, start = EXAMPLES[0]): void {
   const deck = ctx.deck();
@@ -40,6 +41,7 @@ export function howItWorks(ctx: HowContext, start = EXAMPLES[0]): void {
       const res = await fetch(`/api/explain?card=${encodeURIComponent(card.id)}`, { cache: 'no-store' });
       const body = await res.json();
       request.textContent = JSON.stringify(body.request, null, 2);
+      if (body.solution) learn(card, body.solution);
     } catch {
       request.textContent = 'Could not load the request.';
     }
@@ -113,7 +115,10 @@ function answerView(card: Card, a: JevAnswer): HTMLElement[] {
     const b = a.box;
     return [head, el('p', { className: 'how-note' }, b ? `Jev's box: from ${Math.round(b.left * 100)}% to ${Math.round(b.right * 100)}% across, ${Math.round(b.top * 100)}% to ${Math.round(b.bottom * 100)}% down (drawn on the card).` : 'No box.')];
   }
-  const label = (id: string) => card.options!.find((o) => o.id === id)?.label ?? id;
+  const label = (id: string) => {
+    const o = card.options!.find((x) => x.id === id);
+    return o?.label || o?.jev || id;
+  };
   const rows = Object.entries(a.probabilities)
     .sort((x, y) => y[1] - x[1])
     .map(([id, p]) => {

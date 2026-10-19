@@ -4,7 +4,7 @@ Copyright (C) 2026 Jose Sabater
 The cards are licensed under the Creative Commons Attribution 4.0 International License (CC BY 4.0), the full
 text of which follows. "The cards" means:
 
-  - the card pictures and the deck: public/cards/ (the PNGs and deck.json) and assets/objects/;
+  - the card pictures and the deck: public/cards/ (the PNGs and deck.json), cards/deck.json and assets/objects/;
   - the card content written in cards/*.ts: the prompts, the options, the answers, the explanations and the
     drawings (the code that builds the cards is under the AGPL, see LICENSE);
   - the sound: assets/sound/ and public/sound/;

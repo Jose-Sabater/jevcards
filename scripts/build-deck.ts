@@ -1,17 +1,20 @@
 /**
  * Builds the deck: every card module under cards/ and cards/season<N>/ (any .ts file but lib.ts and *.test.ts)
  * default-exports a CardSpec or an array of them. Each SVG is rendered to public/cards/<id>.png and the specs,
- * without their SVG, go to public/cards/deck.json. Cards from cards/season<N>/ carry `season: N`.
+ * without their SVG, go to cards/deck.json, which only the server and the scripts read. The page loads
+ * public/cards/deck.json: the same cards without their answers (forPage in shared/game.ts). Cards from
+ * cards/season<N>/ carry `season: N`.
  *
  *   npm run deck                 every card
  *   npm run deck -- maps chess   only the cards in cards/maps.ts and cards/chess.ts (the deck keeps the others)
  *   npm run deck -- season1/sports   only cards/season1/sports.ts
- *   npm run deck -- maps --out public/cards/deck-maps.json   only those, into their own deck file (for npm run bench -- --deck)
+ *   npm run deck -- maps --out cards/deck-maps.json   only those, into their own deck file (for npm run bench -- --deck)
  */
 import { Resvg } from '@resvg/resvg-js';
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { H, W, type Card, type CardSpec, type Region } from '../cards/lib.ts';
+import { forPage } from '../shared/game.ts';
 
 const root = join(import.meta.dirname, '..');
 const argv = process.argv.slice(2);
@@ -21,7 +24,7 @@ const only = argv;
 const cardFiles = (dir: string) => readdirSync(join(root, dir)).filter((f) => f.endsWith('.ts') && f !== 'lib.ts' && !f.endsWith('.test.ts') && !f.startsWith('_'));
 const seasons = readdirSync(join(root, 'cards'), { withFileTypes: true }).filter((d) => d.isDirectory() && /^season\d+$/.test(d.name)).map((d) => d.name);
 const files = [...cardFiles('cards'), ...seasons.flatMap((s) => cardFiles(`cards/${s}`).map((f) => `${s}/${f}`))];
-const deckPath = join(root, out ?? 'public/cards/deck.json');
+const deckPath = join(root, out ?? 'cards/deck.json');
 const previous: Card[] = !out && existsSync(deckPath) ? JSON.parse(readFileSync(deckPath, 'utf8')).cards : [];
 
 const built: Card[] = [];
@@ -58,8 +61,10 @@ if (problems.length) {
   process.exit(1);
 }
 // One card per line: readable in a diff, without the indentation that doubled the download.
-writeFileSync(deckPath, `{"version":1,"cards":[\n${built.map((c) => JSON.stringify(c)).join(',\n')}\n]}\n`);
-console.log(`\n${built.length} cards in ${out ?? "public/cards/deck.json"}`);
+const deckJson = (cards: object[]) => `{"version":1,"cards":[\n${cards.map((c) => JSON.stringify(c)).join(',\n')}\n]}\n`;
+writeFileSync(deckPath, deckJson(built));
+if (!out) writeFileSync(join(root, 'public/cards/deck.json'), deckJson(built.map(forPage)));
+console.log(`\n${built.length} cards in ${out ?? 'cards/deck.json (and public/cards/deck.json, without the answers)'}`);
 
 /**
  * Smaller tap regions for the download: polygon points rounded to 1/10000 of the picture and thinned where they sit

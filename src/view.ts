@@ -2,7 +2,7 @@
  * One card on screen: the prompt, the picture, and buttons for buttons cards. The player answers by tapping
  * the picture (pick and point cards) or a button; `reveal` then marks the right answer, the player's and Jev's.
  */
-import { optionAt, inside, type Region } from '../cards/lib.ts';
+import { optionAt, type Region } from '../cards/lib.ts';
 import type { Card, JevAnswer } from './api.ts';
 import { el } from './dom.ts';
 
@@ -10,6 +10,7 @@ export interface PlayerAnswer {
   /** pick and buttons: the option chosen. point: the tap. Null when the time ran out. */
   option?: string;
   point?: { x: number; y: number };
+  /** Filled in by the server's mark: the page does not know the answers until then. */
   correct: boolean;
   ms: number;
 }
@@ -103,15 +104,15 @@ export class CardView {
     if (this.card.kind === 'pick') {
       const o = optionAt(this.card, x, y);
       if (!o) return pulse(frame);
-      this.finish({ option: o.id, correct: o.id === this.card.answer, ms: this.elapsed() });
+      this.finish({ option: o.id, correct: false, ms: this.elapsed() });
     } else {
-      this.finish({ point: { x, y }, correct: inside(this.card.target!, x, y, 0.01), ms: this.elapsed() });
+      this.finish({ point: { x, y }, correct: false, ms: this.elapsed() });
     }
   }
 
   private choose(id: string): void {
     if (this.done || !this.started) return;
-    this.finish({ option: id, correct: id === this.card.answer, ms: this.elapsed() });
+    this.finish({ option: id, correct: false, ms: this.elapsed() });
   }
 
   /** Time is up: answers nothing. */
@@ -125,7 +126,10 @@ export class CardView {
     this.resolveAnswer(a);
   }
 
-  /** Marks the right answer, the player's answer, Jev's (if given) and, in a live match, everyone else's. */
+  /**
+   * Marks the right answer, the player's answer, Jev's (if given) and, in a live match, everyone else's. Call it
+   * once the card's solution is known (learn in api.ts).
+   */
   reveal(you: PlayerAnswer | null, jev: JevAnswer | null, others: OtherAnswer[] = []): void {
     const c = this.card;
     const svg = this.overlay;
@@ -152,7 +156,7 @@ export class CardView {
     }
     if (c.kind === 'buttons') return;
     // The right answer, when it is in the picture.
-    const right = c.kind === 'pick' ? c.options!.find((o) => o.id === c.answer)!.region : c.target!;
+    const right = c.kind === 'pick' ? c.options!.find((o) => o.id === c.answer)?.region : c.target;
     if (right) svg.append(regionShape(right, 'mark-right'));
     if (c.kind === 'pick') {
       if (jev?.choice && jev.choice !== c.answer) {

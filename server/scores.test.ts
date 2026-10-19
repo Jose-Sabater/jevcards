@@ -4,11 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { inside, type Card } from '../cards/lib.ts';
-import { deal, jevAnswerMessage, standardSetup, type Mode, type RecordedAnswer, type Recording } from '../shared/game.ts';
-import { Boards, checkGame, issueDeal, readShare, shareToken, winner } from './scores.ts';
+import { deal, forPage, jevAnswerMessage, standardSetup, type Mode, type RecordedAnswer, type Recording } from '../shared/game.ts';
+import { Boards, checkGame, dealtCards, Games, issueDeal, readShare, shareToken, winner } from './scores.ts';
 import { signer } from './sign.ts';
 
-const cards: Card[] = JSON.parse(readFileSync(join(import.meta.dirname, '..', 'public', 'cards', 'deck.json'), 'utf8')).cards;
+const cards: Card[] = JSON.parse(readFileSync(join(import.meta.dirname, '..', 'cards', 'deck.json'), 'utf8')).cards;
 const deck = new Map(cards.map((c) => [c.id, c]));
 const s = signer('test-secret-test-secret-test-secret');
 
@@ -98,4 +98,43 @@ test('a deal takes every theme in turn: ten cards, ten themes', () => {
   }
   const all = deal([...deck.values()], 'streak', 7);
   assert.equal(new Set(all).size, deck.size, 'a streak deals every card once');
+});
+
+test('the page deck has no answers, and the server marks each answer in order and gives the solution', () => {
+  for (const c of deck.values()) {
+    const p = forPage(c) as Partial<Card>;
+    assert.ok(!p.answer && !p.target && !p.explain && !p.options?.some((o) => o.region && o.label), c.id);
+  }
+  const g = new Games();
+  const now = Date.now();
+  const d = issueDeal(s, standardSetup('sprint'), now - 600_000);
+  const ids = deal([...deck.values()], 'sprint', d.seed);
+  const answer = (i: number) => rightAnswer(deck.get(ids[i])!, 2000);
+  assert.throws(() => g.mark(s, deck, d.deal, 1, answer(1), now), /earlier card/);
+  assert.throws(() => g.mark(s, deck, d.deal, 0, answer(1), now), /not the card/);
+  const first = g.mark(s, deck, d.deal, 0, answer(0), now);
+  assert.equal(first.right, true);
+  assert.equal(first.solution.explain, deck.get(ids[0])!.explain);
+  assert.equal(g.mark(s, deck, d.deal, 0, answer(0), now).right, true, 'a retry gets the same mark');
+  assert.throws(() => g.mark(s, deck, d.deal, 0, { card: ids[0], option: 'nope', ms: 2000 }, now), /already answered/);
+  for (let i = 1; i < ids.length; i++) g.mark(s, deck, d.deal, i, i === 4 ? { card: ids[i], option: 'nope', ms: 2000 } : answer(i), now);
+  // What counts is what the server marked: a recording that claims every answer was right changes nothing.
+  const claimed = { version: 1 as const, mode: 'sprint' as const, deal: d.deal, answers: ids.map((_, i) => answer(i)) };
+  const checked = checkGame(s, { ...claimed, answers: g.answers(d.deal)! }, deck, now);
+  assert.equal(checked.right, 9);
+  assert.equal(g.answers('not.a.deal'), null);
+
+  const st = issueDeal(s, standardSetup('streak'), now - 600_000);
+  const sids = deal([...deck.values()], 'streak', st.seed);
+  assert.equal(g.mark(s, deck, st.deal, 0, { card: sids[0], ms: 10_000 }, now).right, false, 'no answer: the time ran out');
+  assert.throws(() => g.mark(s, deck, st.deal, 1, rightAnswer(deck.get(sids[1])!, 2000), now), /streak is over/);
+});
+
+test('a deal names its cards, and a forged or old deal names none (Jev is only asked about dealt cards)', () => {
+  const now = Date.now();
+  const d = issueDeal(s, standardSetup('versus'), now - 60_000);
+  assert.deepEqual(dealtCards(s, deck, d.deal, now).ids, deal([...deck.values()], 'versus', d.seed));
+  assert.throws(() => dealtCards(s, deck, d.deal.slice(0, -2) + 'xx', now), /bad deal/);
+  assert.throws(() => dealtCards(s, deck, issueDeal(s, standardSetup('versus'), now - 3 * 3600_000).deal, now), /too old/);
+  assert.throws(() => dealtCards(s, deck, undefined, now), /bad deal/);
 });

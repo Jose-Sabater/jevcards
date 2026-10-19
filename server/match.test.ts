@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import type { Card } from '../cards/lib.ts';
 import { Matches } from './match.ts';
 
-const cards: Card[] = JSON.parse(readFileSync(join(import.meta.dirname, '..', 'public', 'cards', 'deck.json'), 'utf8')).cards;
+const cards: Card[] = JSON.parse(readFileSync(join(import.meta.dirname, '..', 'cards', 'deck.json'), 'utf8')).cards;
 const deck = new Map(cards.map((c) => [c.id, c]));
 
 /** A response that records what the server sends. */

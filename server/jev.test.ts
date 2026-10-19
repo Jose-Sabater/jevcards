@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import type { Card } from '../cards/lib.ts';
 import { wireBody } from './jev.ts';
 
-const cards: Card[] = JSON.parse(readFileSync(join(import.meta.dirname, '..', 'public', 'cards', 'deck.json'), 'utf8')).cards;
+const cards: Card[] = JSON.parse(readFileSync(join(import.meta.dirname, '..', 'cards', 'deck.json'), 'utf8')).cards;
 
 test("Jev's options carry neutral names, never the card's option ids", () => {
   for (const card of cards.filter((c) => c.options)) {

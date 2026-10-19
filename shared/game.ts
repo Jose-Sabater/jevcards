@@ -3,7 +3,7 @@
  * plays by them and the server replays a recording by them, so a score on a leaderboard or in a share link is
  * the server's own count, never what the page claims (the same idea as the decision-benchmarks kit).
  */
-import { boxHits, inside, type Card } from '../cards/lib.ts';
+import { inside, type Card, type Region } from '../cards/lib.ts';
 
 export type Mode = 'sprint' | 'versus' | 'streak';
 
@@ -144,3 +144,32 @@ export function formatScore(mode: Mode, value: number): string {
 
 /** The message Jev's answers are signed over. */
 export const jevAnswerMessage = (a: Omit<SignedJevAnswer, 'sig'>): string => `jev-cards:answer:${a.card}:${a.correct ? 1 : 0}:${a.latencyMs}:${a.model}`;
+
+/** The cards the how-it-works page shows (src/how.ts): their solutions come with the request (GET /api/explain). */
+export const HOW_EXAMPLES = ['fruit-peach', 'stroop-ink', 'map-egypt', 'big-cat-cheetah', 'flag-sweden', 'chess-mate-piece'];
+
+/**
+ * What the page learns about a card once it is answered: the right option or place, why, and what the things in
+ * the picture are. The deck the page loads leaves all of this out (forPage), so the answers are not in the
+ * download; the server sends a card's solution with its mark (POST /api/mark), or at a live match's reveal.
+ */
+export interface Solution {
+  answer?: string;
+  target?: Region;
+  explain: string;
+  /** pick cards: what each thing in the picture is, by option id. */
+  labels: Record<string, string>;
+}
+
+export const solutionOf = (c: Card): Solution => ({
+  answer: c.answer,
+  target: c.target,
+  explain: c.explain,
+  labels: Object.fromEntries((c.options ?? []).filter((o) => o.region).map((o) => [o.id, o.label])),
+});
+
+/** A card as the page loads it: no answer, no target, no explanation, and the things in the picture unnamed. */
+export function forPage(c: Card): Omit<Card, 'answer' | 'target' | 'explain'> {
+  const { answer: _a, target: _t, explain: _e, ...rest } = c;
+  return { ...rest, ...(c.options ? { options: c.options.map(({ label, ...o }) => (o.region ? { ...o, label: '' } : { ...o, label })) } : {}) };
+}

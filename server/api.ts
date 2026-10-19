@@ -4,14 +4,19 @@
  *
  *   GET  /api/health   { ok, liveMatches }: matches a restart would end
  *   GET  /api/models   the models Jev can be played as, and which ones are reachable with the keys set
- *   POST /api/ask      { card, model }: asks the model that card (by id; the server owns the pictures and the
- *                      questions, so this endpoint can only spend keys on the deck)
+ *   POST /api/ask      { card, model, deal }: asks the model that card (by id; the server owns the pictures and the
+ *                      questions, so this endpoint can only spend keys on the deck). Only a card in that deal, or
+ *                      one of the how page's examples: Jev's answer, right or wrong, gives most answers away
  *   POST /api/taunt    { model, mode, winner, person, jev, ... }: Jev picks its last word after a match (numbers
  *                      only; the lines are fixed in server/taunts.ts)
- *   GET  /api/explain  ?card=: the exact request Jev gets for a card (its picture shortened), for the how-it-works page
- *   GET  /api/deal     ?mode=: a signed deal for a ranked game, and its cards in order
+ *   GET  /api/explain  ?card=: the exact request Jev gets for a card (its picture shortened), for the how-it-works
+ *                      page; for that page's example cards, also their solution
+ *   GET  /api/deal     ?mode=: a signed deal for a game, and its cards in order
+ *   POST /api/mark     { deal, index, card, option | point, ms }: marks one answer as it is given, in order, and
+ *                      answers { right, solution }; the page's deck has no answers (server/scores.ts)
  *   GET  /api/highscores           the leaderboards (the decision-benchmarks kit's { order, boards } shape)
- *   POST /api/result   { recording, initials?, enter? }: checks a finished game; with enter, puts it on the board
+ *   POST /api/result   { recording, initials?, enter? }: checks a finished game (the answers the server marked,
+ *                      not the recording's); with enter, puts it on the board
  *                      under the initials. Answers with the server's own score, the place, the boards and a share
  *                      link (which shows the initials when given)
  *   GET  /api/share/<token>        a shared game, checked
@@ -29,15 +34,22 @@ import type { Card } from '../cards/lib.ts';
 import { ask, cardPng, DEFAULT_MODEL, findModel, JevError, MODELS, wireBody, type Env } from './jev.ts';
 import { parseResult, taunt } from './taunts.ts';
 import { dataDir, loadSecret, signer, type SignEnv } from './sign.ts';
-import { Boards, checkGame, cleanInitials, GameError, issueDeal, playable, readShare, shareToken, winner } from './scores.ts';
+import { Boards, checkGame, cleanInitials, dealtCards, GameError, Games, issueDeal, playable, readShare, shareToken, winner } from './scores.ts';
 import { matchImage, shareImage } from './share-image.ts';
 import { cleanName, Matches } from './match.ts';
 import { isOffensive } from './names.ts';
-import { cleanSetup, deal, formatScore, isRanked, jevAnswerMessage, RANKED } from '../shared/game.ts';
+import { cleanSetup, deal, formatScore, HOW_EXAMPLES, isRanked, jevAnswerMessage, RANKED, solutionOf } from '../shared/game.ts';
 
 const MAX_BODY = 10_000;
 /** Asks per second one visitor may make: a game asks at most a few. */
 const RATE = 6;
+
+/**
+ * Answers one visitor may have marked: one a second, with room for a quick run. A person needs more than a second
+ * a card; a script collecting the answers gets them slowly.
+ */
+const MARK_RATE = 1;
+const MARK_BURST = 30;
 
 /** Entries a visitor may put on the boards per hour, refused ones included. */
 const ENTRIES_PER_HOUR = 20;
@@ -45,10 +57,13 @@ const ENTRIES_PER_HOUR = 20;
 export function createApi(env: Env & SignEnv & { TRUST_PROXY?: string; PROXY_SECRET?: string; PUBLIC_ORIGIN?: string }, root = join(import.meta.dirname, '..'), publicDir = 'public') {
   const sign = signer(loadSecret(env, root));
   const boards = new Boards(dataDir(env, root));
+  const games = new Games();
   const entries = new Map<string, number[]>();
   let matches: Matches | undefined;
   const buckets = new Map<string, { tokens: number; at: number }>();
-  const deckFile = join(root, publicDir, 'cards/deck.json');
+  const markBuckets = new Map<string, { tokens: number; at: number }>();
+  // The whole deck, answers included: not under public/, so it is never served as a file.
+  const deckFile = join(root, 'cards/deck.json');
   let deck: { mtime: number; cards: Map<string, Card> } | undefined;
 
   /** The deck, read again when the file changes (cheap: one stat per ask). */
@@ -61,13 +76,13 @@ export function createApi(env: Env & SignEnv & { TRUST_PROXY?: string; PROXY_SEC
     return deck.cards;
   };
 
-  const allow = (ip: string): boolean => {
+  const allow = (ip: string, pool = buckets, rate = RATE, burst = RATE * 2): boolean => {
     const now = Date.now();
-    const b = buckets.get(ip) ?? { tokens: RATE * 2, at: now };
-    b.tokens = Math.min(RATE * 2, b.tokens + ((now - b.at) / 1000) * RATE);
+    const b = pool.get(ip) ?? { tokens: burst, at: now };
+    b.tokens = Math.min(burst, b.tokens + ((now - b.at) / 1000) * rate);
     b.at = now;
-    buckets.set(ip, b);
-    if (buckets.size > 10_000) for (const [k, v] of buckets) if (now - v.at > 5_000) buckets.delete(k);
+    pool.set(ip, b);
+    if (pool.size > 10_000) for (const [k, v] of pool) if (now - v.at > (burst / rate) * 1000) pool.delete(k);
     if (b.tokens < 1) return false;
     b.tokens -= 1;
     return true;
@@ -216,7 +231,7 @@ export function createApi(env: Env & SignEnv & { TRUST_PROXY?: string; PROXY_SEC
         const body = wireBody(card, '', findModel(DEFAULT_MODEL)!.id) as { assets: Record<string, { data_base64: string }> };
         // The picture is the card's PNG; its bytes would only fill the page.
         for (const a of Object.values(body.assets)) a.data_base64 = `<the picture above: a ${card.width} x ${card.height} PNG>`;
-        send(200, { request: body });
+        send(200, { request: body, solution: HOW_EXAMPLES.includes(card.id) ? solutionOf(card) : null });
         return true;
       }
       if (url.pathname === '/api/deal' && req.method === 'GET') {
@@ -225,6 +240,23 @@ export function createApi(env: Env & SignEnv & { TRUST_PROXY?: string; PROXY_SEC
         if (!setup) throw new JevError(400, 'not a setup the game offers');
         const d = issueDeal(sign, setup);
         send(200, { deal: d.deal, ranked: isRanked(setup), cards: deal(playable(await loadDeck(), setup.box), setup.mode, d.seed, setup.cards) });
+        return true;
+      }
+      if (url.pathname === '/api/mark' && req.method === 'POST') {
+        if (!sameSite(req)) throw new JevError(403, 'cross-site requests are not served');
+        if (!allow(visitor(req), markBuckets, MARK_RATE, MARK_BURST)) throw new JevError(429, 'too many answers: slow down');
+        let body: Record<string, unknown>;
+        try {
+          body = JSON.parse(await readBody(req));
+        } catch (e) {
+          throw e instanceof JevError ? e : new JevError(400, 'body is not JSON');
+        }
+        try {
+          send(200, games.mark(sign, await loadDeck(), body.deal, Number(body.index), body));
+        } catch (e) {
+          if (e instanceof GameError) throw new JevError(409, e.message);
+          throw e;
+        }
         return true;
       }
       if (url.pathname === '/api/highscores' && req.method === 'GET') {
@@ -248,9 +280,13 @@ export function createApi(env: Env & SignEnv & { TRUST_PROXY?: string; PROXY_SEC
         } catch (e) {
           throw e instanceof JevError ? e : new JevError(400, 'body is not JSON');
         }
+        // What counts is what the server marked as the game went, whatever the recording says.
+        const rec = body.recording as { deal?: unknown; answers?: unknown } | null;
+        const held = rec && typeof rec === 'object' ? games.answers(rec.deal) : null;
+        if (!held) throw new JevError(422, 'That game did not check out: the server has no answers for it (it may have restarted)');
         let game;
         try {
-          game = checkGame(sign, body.recording, await loadDeck());
+          game = checkGame(sign, { ...rec, answers: held }, await loadDeck());
         } catch (e) {
           if (e instanceof GameError) throw new JevError(422, `That game did not check out: ${e.message}`);
           throw e;
@@ -300,8 +336,18 @@ export function createApi(env: Env & SignEnv & { TRUST_PROXY?: string; PROXY_SEC
         }
         const model = findModel(body.model ?? DEFAULT_MODEL);
         if (!model) throw new JevError(400, 'unknown model');
-        const card = typeof body.card === 'string' ? (await loadDeck()).get(body.card) : undefined;
+        const deck = await loadDeck();
+        const card = typeof body.card === 'string' ? deck.get(body.card) : undefined;
         if (!card) throw new JevError(404, 'no such card');
+        if (!HOW_EXAMPLES.includes(card.id)) {
+          let ids: string[];
+          try {
+            ids = dealtCards(sign, deck, body.deal).ids;
+          } catch (e) {
+            throw e instanceof GameError ? new JevError(409, e.message) : e;
+          }
+          if (!ids.includes(card.id)) throw new JevError(409, 'that card is not in this game');
+        }
         const a = await ask(card, await cardPng(join(root, publicDir), card), model, env);
         // Signed, so a share link can show Jev's side without trusting the page.
         const signed = { card: card.id, correct: a.correct, latencyMs: a.latencyMs, model: model.id };

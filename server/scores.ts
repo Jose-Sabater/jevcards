@@ -4,9 +4,12 @@
  *   deal       `<mode>.<cards>.<limitMs>.<box>.<seed>.<issuedAt>.<sig>`: fixes a game's setup and which cards it
  *              gets, in which order (shared/game.ts). Any setup the game offers can be dealt and shared; only the
  *              standard one ranks.
- *   check      replays a recording against the deck: every answer is re-marked here, the score is the server's
- *              own count, and a game that is faster than possible, longer than the time since its deal, or on
- *              other cards is refused.
+ *   mark       the page sends each answer as it is given (POST /api/mark) and gets back right or wrong and the
+ *              card's solution: the deck the page loads has no answers. The server keeps the answers it marked,
+ *              in order, one per card; what counts at the end is that list, not the page's recording.
+ *   check      replays a game's answers against the deck: every answer is re-marked here, the score is the
+ *              server's own count, and a game that is faster than possible, longer than the time since its deal,
+ *              or on other cards is refused.
  *   boards     the top 10 per mode, three-letter initials, one line per player (the decision-benchmarks kit's
  *              shape: { initials, score, at, who }), kept in a JSON file in the data directory.
  *   share      `/r/<payload>.<sig>`: a finished game anyone can open, with the server-checked numbers.
@@ -14,7 +17,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Card } from '../cards/lib.ts';
-import { cleanSetup, deal, isRanked, isRight, jevAnswerMessage, jevScore, lowerIsBetter, MODES, score, type Mode, type Recording, type Setup } from '../shared/game.ts';
+import { cleanSetup, deal, isRanked, isRight, jevAnswerMessage, jevScore, lowerIsBetter, MODES, score, solutionOf, type Mode, type RecordedAnswer, type Recording, type Setup, type Solution } from '../shared/game.ts';
 import { TAUNTS } from './taunt-lines.ts';
 import type { Signer } from './sign.ts';
 
@@ -47,8 +50,75 @@ export function readDeal(s: Signer, token: unknown, now = Date.now()): { setup: 
   return { setup, seed: Number(seed), issuedAt, id: sig };
 }
 
+/** The card ids a deal gets, in order; throws when the deal is not good (forged, or too old). */
+export function dealtCards(s: Signer, deck: Map<string, Card>, token: unknown, now = Date.now()): { d: ReturnType<typeof readDeal>; ids: string[] } {
+  const d = readDeal(s, token, now);
+  return { d, ids: deal(playable(deck, d.setup.box), d.setup.mode, d.seed, d.setup.cards) };
+}
+
 /** The cards a setup deals from: all of them, or all but the "tap the place" ones. */
 export const playable = (deck: Map<string, Card>, box: boolean): Card[] => [...deck.values()].filter((c) => box || c.kind !== 'point');
+
+// ---------------------------------------------------------------------------------------------------- mark
+
+/** Games being played: more than this and the oldest are dropped (their players can still finish, unranked). */
+const MAX_GAMES = 50_000;
+
+/**
+ * The answers of the games in progress, by deal, as the server marked them. In memory: a restart loses them, and
+ * a game that was going on then cannot be checked (it is dealt again with the next game).
+ */
+export class Games {
+  private games = new Map<string, { answers: RecordedAnswer[]; at: number }>();
+  private swept = 0;
+
+  /**
+   * Marks answer `index` of a deal: it must be the next one, for the card dealt there. The same answer sent again
+   * (a retry after a dropped connection) gets the same mark. A time under the minimum counts as the minimum, and
+   * one over the limit as the limit, so a stray double tap or a slow timer does not spoil the game.
+   */
+  mark(s: Signer, deck: Map<string, Card>, token: unknown, index: number, a: { card?: unknown; option?: unknown; point?: unknown; ms?: unknown }, now = Date.now()): { right: boolean; solution: Solution } {
+    const { d, ids } = dealtCards(s, deck, token, now);
+    if (!Number.isInteger(index) || index < 0 || index >= ids.length || a.card !== ids[index]) throw new GameError('that is not the card dealt here');
+    const point = Array.isArray(a.point) && a.point.length === 2 && a.point.every((v) => typeof v === 'number' && v >= 0 && v <= 1) ? (a.point as [number, number]) : undefined;
+    const option = typeof a.option === 'string' ? a.option.slice(0, 40) : undefined;
+    const limit = d.setup.mode === 'sprint' ? MAX_SPRINT_CARD_MS : d.setup.limitMs;
+    const ms = Math.min(limit, Math.max(MIN_MS, Math.round(Number(a.ms) || 0)));
+    const answer: RecordedAnswer = { card: ids[index], ...(option !== undefined ? { option } : {}), ...(point ? { point } : {}), ms };
+    const card = deck.get(ids[index])!;
+
+    const game = this.games.get(d.id) ?? { answers: [], at: now };
+    const before = game.answers[index];
+    if (before) {
+      if (before.option !== answer.option || String(before.point) !== String(answer.point)) throw new GameError('that card is already answered');
+      return { right: isRight(card, before), solution: solutionOf(card) };
+    }
+    if (index !== game.answers.length) throw new GameError(index > game.answers.length ? 'an earlier card has no answer (the server may have restarted)' : 'that card is already answered');
+    if (d.setup.mode === 'streak' && game.answers.some((x) => !isRight(deck.get(x.card)!, x))) throw new GameError('the streak is over');
+    if (game.answers.reduce((t, x) => t + x.ms, ms) > now - d.issuedAt + 2_000) throw new GameError('the answer times add up to more than the game has lasted');
+    game.answers.push(answer);
+    game.at = now;
+    if (!this.games.has(d.id)) {
+      this.sweep(now);
+      this.games.set(d.id, game);
+    }
+    return { right: isRight(card, answer), solution: solutionOf(card) };
+  }
+
+  /** The answers marked for a deal so far, or null when the server has none (an unknown or lost game). */
+  answers(token: unknown): RecordedAnswer[] | null {
+    const sig = String(token ?? '').split('.')[6];
+    return (sig && this.games.get(sig)?.answers) || null;
+  }
+
+  private sweep(now: number): void {
+    if (now - this.swept > 60_000) {
+      this.swept = now;
+      for (const [id, g] of this.games) if (now - g.at > DEAL_TTL_MS) this.games.delete(id);
+    }
+    while (this.games.size >= MAX_GAMES) this.games.delete(this.games.keys().next().value!);
+  }
+}
 
 // ---------------------------------------------------------------------------------------------------- check
 

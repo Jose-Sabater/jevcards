@@ -4,7 +4,7 @@
  *   npm run bench                         every card, Jev 1.14
  *   npm run bench -- --model typesafe/jev-1.13.0
  *   npm run bench -- --cards fruit-peach,map-egypt --runs 3
- *   npm run bench -- --deck public/cards/deck-maps.json
+ *   npm run bench -- --deck cards/deck-maps.json
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -25,7 +25,7 @@ const model = findModel(arg('model') ?? DEFAULT_MODEL);
 if (!model) throw new Error('unknown model');
 const runs = Number(arg('runs') ?? 1);
 const pick = arg('cards')?.split(',');
-const deck: Card[] = JSON.parse(readFileSync(join(root, arg('deck') ?? 'public/cards/deck.json'), 'utf8')).cards;
+const deck: Card[] = JSON.parse(readFileSync(join(root, arg('deck') ?? 'cards/deck.json'), 'utf8')).cards;
 const cards = deck.filter((c) => !pick || pick.includes(c.id)).filter((c) => c.kind !== 'point' || model.box);
 
 let right = 0, total = 0;

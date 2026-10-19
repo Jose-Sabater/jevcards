@@ -62,7 +62,10 @@ export interface CardSpec {
   source: 'drawn' | 'generated' | 'mixed';
 }
 
-/** What the game loads (public/cards/deck.json): the spec without its SVG. */
+/**
+ * A card in the deck (cards/deck.json): the spec without its SVG. The page loads public/cards/deck.json, the same
+ * cards without their answers (forPage in shared/game.ts).
+ */
 export type Card = Omit<CardSpec, 'svg'> & {
   image: string;
   width: number;

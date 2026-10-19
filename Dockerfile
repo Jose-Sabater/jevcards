@@ -20,7 +20,7 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
 COPY server ./server
 COPY shared ./shared
-COPY cards/lib.ts ./cards/lib.ts
+COPY cards/lib.ts cards/deck.json ./cards/
 COPY assets/fonts ./assets/fonts
 EXPOSE 3000
 CMD ["node", "server/main.ts"]

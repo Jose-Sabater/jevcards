@@ -16,7 +16,9 @@ for "tap the place" cards), asked with the card's picture through the System One
 | **Streak** | Cards until your first miss, 10 s each | Your run against Jev's run on the same cards in the same order. |
 | **Live match** | Share a link; up to 12 people and Jev get the same cards at the same moment, 10 s each. The host picks 5, 10, 15 or 20 rounds and starts when the guests are ready | Like Versus, with a podium after every card and a leaderboard for the match. |
 
-Games on the standard settings go on a top-10 leaderboard per mode. The server checks each one before it counts: the
+The page never has the answers: its deck (`public/cards/deck.json`) leaves them out, and the server marks each answer
+as it is given (`POST /api/mark`), sending back right or wrong and the card's solution. Games on the standard settings
+go on a top-10 leaderboard per mode. The server checks each one before it counts, from the answers it marked: the
 cards were dealt by the server (signed), the times are possible, and Jev's answers are the ones it signed. Every
 game has a share link with a preview image (`/r/...`), and so does every live match invite (`/m/<code>`).
 
@@ -70,7 +72,7 @@ host can each be switched off on the home screen.
 ```bash
 npm install
 cp .env.example .env     # an API key for Jev
-npm run deck             # render cards/*.ts to public/cards/*.png and public/cards/deck.json
+npm run deck             # render cards/*.ts to public/cards/*.png, cards/deck.json and public/cards/deck.json
 npm run dev              # http://localhost:5173
 npm test
 ```
@@ -97,7 +99,8 @@ In production, `npm run build` then `npm start` serves the built page and the AP
 Point cards need Jev 1.14 (box answers). Every call is one System One request, built by `wireBody()` in
 `server/jev.ts`.
 
-The server only asks Jev about cards in the deck (`POST /api/ask` takes a card id), refuses cross-site requests,
+The server only asks Jev about cards in a game in progress (`POST /api/ask` takes a card id and the game's deal;
+the how-it-works page's six examples need no deal), since Jev's answer would give most answers away. It refuses cross-site requests,
 and limits each visitor to a few questions a second. Live match names and leaderboard initials get one quick check
 by Jev, and are refused only when Jev is at least 90% sure they are offensive.
 
@@ -107,7 +110,7 @@ Copyright (C) 2026 Jose Sabater.
 
 - **The code** is free software under the [GNU Affero General Public License 3.0](LICENSE) or later. If you run a
   changed version as a website, the AGPL asks you to offer its source to the people who play it.
-- **The cards** (the pictures, `public/cards/deck.json`, the questions and answers in `cards/*.ts`), the sound and
+- **The cards** (the pictures, `cards/deck.json`, the questions and answers in `cards/*.ts`), the sound and
   the preview image are under [Creative Commons Attribution 4.0](LICENSE-CARDS). Use them for anything, including
   training or evaluating models, as long as you credit them:
 

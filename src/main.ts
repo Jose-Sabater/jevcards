@@ -13,7 +13,7 @@ import '@fontsource/barlow-condensed/latin-500.css';
 import '@fontsource/barlow-condensed/latin-600.css';
 import '@fontsource/barlow-condensed/latin-800.css';
 import '@fontsource/fraunces/latin-600.css';
-import { askTaunt, JevQueue, loadDeck, loadModels, type Card, type JevAnswer, type MatchResult, type ModelInfo } from './api.ts';
+import { askTaunt, JevQueue, loadDeck, loadModels, markAnswer, type Card, type JevAnswer, type MatchResult, type ModelInfo } from './api.ts';
 import { TAUNTS } from '../server/taunt-lines.ts';
 import { el, secs, shuffle, sleep, store } from './dom.ts';
 import { CardView, type PlayerAnswer } from './view.ts';
@@ -42,15 +42,17 @@ let leave: (() => void) | undefined;
 
 const modelName = () => models.find((m) => m.id === settings.model)?.name ?? 'Jev';
 /**
- * The cards for a game: a signed deal from the server for this setup (so the game can be checked, shared, and
- * ranked when the setup is the standard one), or a local shuffle when the server cannot deal.
+ * The cards for a game: a signed deal from the server for this setup. The server marks every answer against it
+ * (the page has no answers), checks the game at the end, and ranks it when the setup is the standard one. Null
+ * when the server cannot deal: the game cannot be played then, and says so.
  */
-async function dealFor(mode: Mode, count: number): Promise<{ cards: Card[]; record: GameRecord | null }> {
+async function dealFor(mode: Mode): Promise<{ cards: Card[]; record: GameRecord } | null> {
   const box = !!models.find((m) => m.id === settings.model)?.box;
   const dealt = await getDeal(mode, mode === 'sprint' ? settings.sprintCards : VERSUS_ROUNDS, mode === 'versus' ? settings.versusSeconds * 1000 : STREAK_LIMIT_MS, box);
   const byId = new Map(deck.map((c) => [c.id, c]));
   if (dealt && dealt.cards.every((id) => byId.has(id))) return { cards: dealt.cards.map((id) => byId.get(id)!), record: new GameRecord(mode, dealt.deal) };
-  return { cards: shuffle(playable()).slice(0, count), record: null };
+  screen(topbar(RANKED[mode].label), el('main', { className: 'play' }, el('div', { className: 'results' }, el('p', { className: 'loading' }, 'Could not reach the game server. Try again in a moment.'), again(PLAY[mode], 'Try again'))));
+  return null;
 }
 
 const playable = (): Card[] => {
@@ -177,7 +179,7 @@ function signature() {
   return el(
     'footer',
     { className: 'signature' },
-    el('a', { href: 'https://github.com/Jose-Sabater/jev-cards', target: '_blank', rel: 'noopener' }, el('span', { className: 'sig-text' }, 'Built by'), el('span', { className: 'sig-mark' }, 'JMS')),
+    el('a', { href: 'https://github.com/Jose-Sabater/jevcards', target: '_blank', rel: 'noopener' }, el('span', { className: 'sig-text' }, 'Built by'), el('span', { className: 'sig-mark' }, 'JMS')),
   );
 }
 
@@ -275,8 +277,11 @@ async function sharePage(token: string) {
 
 // ---------------------------------------------------------------------------------------------------- shared
 
-/** Shows a card, waits for the answer (or the limit), and returns it. `hud` gets the elapsed ms each frame. */
-async function playCard(stage: HTMLElement, view: CardView, limitMs: number | null, hud?: (ms: number) => void): Promise<{ view: CardView; you: PlayerAnswer }> {
+/**
+ * Shows card `index` of the game, waits for the answer (or the limit), has the server mark it, and returns it.
+ * `hud` gets the elapsed ms each frame. Null when the server could not be reached: the stage then says so.
+ */
+async function playCard(stage: HTMLElement, view: CardView, rec: GameRecord, index: number, limitMs: number | null, hud?: (ms: number) => void): Promise<{ view: CardView; you: PlayerAnswer } | null> {
   await view.ready();
   stage.replaceChildren(view.root);
   effect('deal', 0.6);
@@ -295,6 +300,14 @@ async function playCard(stage: HTMLElement, view: CardView, limitMs: number | nu
   const you = await view.answer;
   cancelAnimationFrame(raf);
   clearTimeout(timer);
+  try {
+    you.correct = await markAnswer(rec.recording.deal, index, view.card, you);
+  } catch (e) {
+    const menu = el('button', { className: 'primary', type: 'button' }, 'Menu');
+    menu.addEventListener('click', home);
+    stage.replaceChildren(el('div', { className: 'results' }, el('p', { className: 'loading' }, `${(e as Error).message}. This game cannot go on.`), el('div', { className: 'actions' }, menu)));
+    return null;
+  }
   effect(you.correct ? 'ding' : you.option || you.point ? 'buzzer' : 'timeup');
   return { view, you };
 }
@@ -381,8 +394,10 @@ function soundSwitch(key: 'music' | 'effects' | 'host', label: string) {
 
 async function sprint() {
   hush();
-  const { cards, record: rec } = await dealFor('sprint', settings.sprintCards);
-  const jev = new JevQueue(settings.model);
+  const dealt = await dealFor('sprint');
+  if (!dealt) return;
+  const { cards, record: rec } = dealt;
+  const jev = new JevQueue(settings.model, rec.recording.deal);
   // Jev's answers, in card order, as they arrive (the queue asks one at a time, in this order).
   const jevAnswers: (JevAnswer | Error)[] = [];
   cards.forEach((c, i) => void jev.get(c.id).then((a) => (jevAnswers[i] = a), (e: Error) => (jevAnswers[i] = e)));
@@ -406,14 +421,15 @@ async function sprint() {
   for (const [i, card] of cards.entries()) {
     count.textContent = `${i + 1}/${cards.length}`;
     track.you(i, undefined);
-    const { view, you } = await playCard(stage, cardView(card), null, tick);
-    if (!alive) return;
+    const played = await playCard(stage, cardView(card), rec, i, null, tick);
+    if (!alive || !played) return;
+    const { view, you } = played;
     spent += you.ms;
     if (!you.correct) misses++;
     tick(0);
     track.you(i, you.correct);
     results.push({ card, you });
-    rec?.answer(card.id, you);
+    rec.answer(card.id, you);
     view.reveal(you, null);
     view.root.append(el('div', { className: `flash ${you.correct ? 'ok' : 'no'}` }, you.correct ? 'Right' : '+5 s'));
     // A miss shows why, and waits: the clock is stopped between cards.
@@ -431,13 +447,13 @@ async function sprint() {
   const jevRight = answers.filter((a) => !(a instanceof Error) && a.correct).length;
   const youRight = results.filter((r) => r.you.correct).length;
   const win = yourTime < jevMs;
-  rec?.jev(answers.map((a) => (a instanceof Error ? undefined : a.signed)));
+  rec.jev(answers.map((a) => (a instanceof Error ? undefined : a.signed)));
   let taunt = '';
   finale(win ? 'win' : 'lose', record);
   board.replaceChildren(
     el('h1', { className: 'result-title' }, win ? 'You beat Jev!' : `${modelName()} wins this one`),
     el('div', { className: 'scores' }, scoreBox('You', secs(yourTime), `${youRight}/${cards.length} right${record ? ', new best' : ''}`, win), scoreBox(modelName(), secs(jevMs), `${jevRight}/${cards.length} right`, !win)),
-    ...(rec ? [rankedPanel(rec, () => taunt)] : []),
+    rankedPanel(rec, () => taunt),
     lastWord({ mode: 'sprint', winner: win ? 'person' : 'jev', person: yourTime / 1000, jev: jevMs / 1000, personRight: youRight, jevRight, cards: cards.length }, (id) => (taunt = id)),
     el('p', { className: 'footnote' }, 'Time spent answering, plus 5 seconds for every miss.'),
     cardTable(results.map((r, i) => ({ card: r.card, you: r.you, jev: answers[i] }))),
@@ -616,8 +632,10 @@ function again(fn: () => void, label = 'Play again') {
 async function versus() {
   hush();
   const limit = settings.versusSeconds * 1000;
-  const { cards, record: rec } = await dealFor('versus', VERSUS_ROUNDS);
-  const jev = new JevQueue(settings.model);
+  const dealt = await dealFor('versus');
+  if (!dealt) return;
+  const { cards, record: rec } = dealt;
+  const jev = new JevQueue(settings.model, rec.recording.deal);
   let alive = true;
   const youScore = el('b', { className: 'led' }, '0');
   const jevScore = el('b', { className: 'led' }, '0');
@@ -662,8 +680,9 @@ async function versus() {
         jevChip.className = 'jev-chip error';
       },
     );
-    const { you: ya } = await playCard(stage, view, limit, (ms) => ring.set(limit - ms, limit));
-    if (!alive) return;
+    const played = await playCard(stage, view, rec, i, limit, (ms) => ring.set(limit - ms, limit));
+    if (!alive || !played) return;
+    const ya = played.you;
     // Jev had the same time limit; wait for it only as long as the limit allows.
     await Promise.race([asked, sleep(Math.max(0, limit - ya.ms) + 200)]);
     const ja = jevAnswer instanceof Error || !jevAnswer ? null : jevAnswer;
@@ -673,13 +692,13 @@ async function versus() {
     youScore.textContent = String(you);
     jevScore.textContent = String(them);
     rows.push({ card, you: ya, jev: jevAnswer });
-    rec?.answer(card.id, ya);
+    rec.answer(card.id, ya);
     view.reveal(ya, ja);
     await waitClick((go) => explainPanel(card, ya, jevAnswer instanceof Error ? jevAnswer : (ja ?? 'pending'), go, i + 1 < cards.length ? 'Next card' : 'See the result'), view.root);
     if (!alive) return;
   }
   const record = saveBest('versus', you);
-  rec?.jev(rows.map((r) => (r.jev instanceof Error ? undefined : r.jev?.signed)));
+  rec.jev(rows.map((r) => (r.jev instanceof Error ? undefined : r.jev?.signed)));
   let taunt = '';
   finale(you > them ? 'win' : you === them ? 'draw' : 'lose', record);
   const verdictText = you > them ? 'You beat Jev!' : you === them ? 'A draw!' : `${modelName()} wins this one`;
@@ -690,7 +709,7 @@ async function versus() {
       { className: 'play results' },
       el('h1', { className: 'result-title' }, verdictText),
       el('div', { className: 'scores' }, scoreBox('You', String(you), `${rows.filter((r) => r.you.correct).length}/${rows.length} right${record ? ', new best' : ''}`, you >= them), scoreBox(modelName(), String(them), `${rows.filter((r) => !(r.jev instanceof Error) && r.jev?.correct).length}/${rows.length} right`, them >= you)),
-      rec && rankedPanel(rec, () => taunt),
+      rankedPanel(rec, () => taunt),
       lastWord(
         { mode: 'versus', winner: you > them ? 'person' : you === them ? 'draw' : 'jev', person: you, jev: them, personRight: rows.filter((r) => r.you.correct).length, jevRight: rows.filter((r) => !(r.jev instanceof Error) && r.jev?.correct).length, cards: rows.length },
         (id) => (taunt = id),
@@ -706,8 +725,10 @@ async function versus() {
 
 async function streak() {
   hush();
-  const { cards, record: rec } = await dealFor('streak', Infinity);
-  const jev = new JevQueue(settings.model);
+  const dealt = await dealFor('streak');
+  if (!dealt) return;
+  const { cards, record: rec } = dealt;
+  const jev = new JevQueue(settings.model, rec.recording.deal);
   // Ask a few ahead, so Jev's streak is known soon after yours ends.
   const ahead = (i: number) => cards.slice(i, i + 3).forEach((c) => void jev.get(c.id).catch(() => undefined));
   let alive = true;
@@ -723,10 +744,11 @@ async function streak() {
   let last: { card: Card; you: PlayerAnswer; view: CardView } | undefined;
   for (const [i, card] of cards.entries()) {
     ahead(i);
-    const { view, you } = await playCard(stage, cardView(card), STREAK_LIMIT_MS, (ms) => ring.set(STREAK_LIMIT_MS - ms, STREAK_LIMIT_MS));
-    if (!alive) return;
+    const played = await playCard(stage, cardView(card), rec, i, STREAK_LIMIT_MS, (ms) => ring.set(STREAK_LIMIT_MS - ms, STREAK_LIMIT_MS));
+    if (!alive || !played) return;
+    const { view, you } = played;
     last = { card, you, view };
-    rec?.answer(card.id, you);
+    rec.answer(card.id, you);
     if (!you.correct) break;
     n++;
     run.textContent = `${n} in a row`;
@@ -756,13 +778,13 @@ async function streak() {
     j++;
     (board.firstElementChild as HTMLElement).textContent = `${modelName()} is playing the same cards... ${j} in a row`;
   }
-  rec?.jev(jevRun);
+  rec.jev(jevRun);
   let taunt = '';
   finale(perfect ? 'perfect' : n > j ? 'win' : n === j ? 'draw' : 'lose', record);
   board.replaceChildren(
     el('h1', { className: 'result-title' }, perfect ? 'A perfect run!' : n > j ? 'You beat Jev!' : n === j ? 'A draw!' : `${modelName()} wins this one`),
     el('div', { className: 'scores' }, scoreBox('You', String(n), `in a row${record ? ', new best' : ''}`, n >= j), scoreBox(modelName(), String(j), j === cards.length ? 'every card' : 'in a row', j >= n)),
-    ...(rec ? [rankedPanel(rec, () => taunt)] : []),
+    rankedPanel(rec, () => taunt),
     lastWord({ mode: 'streak', winner: perfect || n > j ? 'person' : n === j ? 'draw' : 'jev', person: n, jev: j, personRight: n, jevRight: j, cards: cards.length }, (id) => (taunt = id)),
     again(streak),
   );

@@ -15,7 +15,7 @@
 import { randomBytes } from 'node:crypto';
 import type { ServerResponse } from 'node:http';
 import type { Card } from '../cards/lib.ts';
-import { deal, isRight, versusPoints, type RecordedAnswer } from '../shared/game.ts';
+import { deal, isRight, solutionOf, versusPoints, type RecordedAnswer, type Solution } from '../shared/game.ts';
 import { JevError } from './jev.ts';
 
 /** The match lengths a host can pick. */
@@ -66,6 +66,8 @@ interface Round {
   startsAt: number;
   revealed: boolean;
   answers: Map<string, RoundAnswer>;
+  /** The card's answer and why, shown to everyone at the reveal (the page's deck has no answers). */
+  solution?: Solution;
   jev?: { right: boolean; ms: number; points: number; choice?: string; box?: { top: number; bottom: number; left: number; right: number } } | null;
 }
 
@@ -257,6 +259,7 @@ export class Matches {
   private openRound(room: Room, index: number, startsAt: number): void {
     const round: Round = { index, card: room.cards[index], startsAt, revealed: false, answers: new Map() };
     room.round = round;
+    void this.deck().then((deck) => (round.solution = solutionOf(deck.get(round.card)!)));
     this.broadcast(room);
     // Jev is asked as the card appears, like everyone else sees it.
     clearTimeout(room.timer);
@@ -369,6 +372,7 @@ export class Matches {
         mine: r.answers.get(me.id) ?? null,
         answers: r.revealed ? Object.fromEntries([...r.answers].map(([id, a]) => [id, a])) : null,
         jevAnswer: r.revealed ? (r.jev ?? null) : null,
+        solution: r.revealed ? (r.solution ?? null) : null,
       },
       taunt: room.taunt,
       serverNow: Date.now(),
