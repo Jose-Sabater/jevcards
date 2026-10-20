@@ -407,6 +407,12 @@ h1 {
   text-transform: uppercase;
 }
 
+.sig-code {
+  margin-top: 4px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 /* ---------------------------------------------------------------- play */
 
 .topbar {

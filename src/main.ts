@@ -186,12 +186,12 @@ function home() {
   );
 }
 
-/** The maker's mark at the foot of a page: "Built by JMS" (JMS as on jose.sabater.io), linking to the source. */
+/** The maker's mark at the foot of a page: "Built by JMS" (JMS as on jose.sabater.io), and a line saying it links to the source. */
 function signature() {
   return el(
     'footer',
     { className: 'signature' },
-    el('a', { href: 'https://github.com/Jose-Sabater/jevcards', target: '_blank', rel: 'noopener' }, el('span', { className: 'sig-text' }, 'Built by'), el('span', { className: 'sig-mark' }, 'JMS')),
+    el('a', { href: 'https://github.com/Jose-Sabater/jevcards', target: '_blank', rel: 'noopener' }, el('span', { className: 'sig-text' }, 'Built by'), el('span', { className: 'sig-mark' }, 'JMS'), el('span', { className: 'sig-text sig-code' }, 'Code on GitHub ↗')),
   );
 }
 
