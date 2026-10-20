@@ -74,3 +74,32 @@ test('the host stays host while away for a bit, and a leaving host hands over', 
   m.leave(host.code, guest.token);
   assert.equal(m.summary(host.code), null, 'an empty room ends');
 });
+
+test('one visitor may keep 5 rooms open, and a lobby nobody watches closes after 5 minutes', () => {
+  const m = new Matches(async () => deck, async () => ({ correct: true, latencyMs: 300 }), async () => null);
+  const codes = Array.from({ length: 5 }, () => m.create('AAA', '1.2.3.4').code);
+  assert.throws(() => m.create('AAA', '1.2.3.4'), /5 matches open/);
+  assert.ok(m.create('BBB', '5.6.7.8'), 'someone else still can');
+  const realNow = Date.now;
+  Date.now = () => realNow() + 6 * 60_000;
+  try {
+    assert.ok(m.create('AAA', '1.2.3.4'), 'the abandoned lobbies were closed');
+    assert.equal(m.summary(codes[0]), null);
+  } finally {
+    Date.now = realNow;
+  }
+});
+
+test('a finished match is counted toward Jev\'s tally', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: Date.now() });
+  const results: string[] = [];
+  const m = new Matches(async () => deck, async () => ({ correct: true, latencyMs: 300 }), async () => null, (w) => results.push(w));
+  const host = m.create('AAA');
+  m.setRounds(host.code, host.token, 5);
+  await m.start(host.code, host.token);
+  for (let i = 0; i < 200 && !results.length; i++) {
+    t.mock.timers.tick(1_000);
+    await new Promise((r) => setImmediate(r));
+  }
+  assert.deepEqual(results, ['jev'], 'Jev answered every card right; the host none');
+});

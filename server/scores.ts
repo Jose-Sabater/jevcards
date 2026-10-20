@@ -22,7 +22,7 @@ import { TAUNTS } from './taunt-lines.ts';
 import type { Signer } from './sign.ts';
 
 /** A deal is good for two hours: a game, then entering initials, with room to spare. */
-const DEAL_TTL_MS = 2 * 60 * 60 * 1000;
+export const DEAL_TTL_MS = 2 * 60 * 60 * 1000;
 /** Nobody reads a card and taps the answer in under 150 ms. */
 const MIN_MS = 150;
 const MAX_SPRINT_CARD_MS = 120_000;

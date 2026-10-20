@@ -14,7 +14,8 @@
  *   GET  /api/deal     ?mode=: a signed deal for a game, and its cards in order
  *   POST /api/mark     { deal, index, card, option | point, ms }: marks one answer as it is given, in order, and
  *                      answers { right, solution }; the page's deck has no answers (server/scores.ts)
- *   GET  /api/highscores           the leaderboards (the decision-benchmarks kit's { order, boards } shape)
+ *   GET  /api/highscores           the leaderboards (the decision-benchmarks kit's { order, boards } shape), with
+ *                                  `closed` when BOARDS=off, and Jev's tally of wins, losses and draws
  *   POST /api/result   { recording, initials?, enter? }: checks a finished game (the answers the server marked,
  *                      not the recording's); with enter, puts it on the board
  *                      under the initials. Answers with the server's own score, the place, the boards and a share
@@ -37,8 +38,9 @@ import { dataDir, loadSecret, signer, type SignEnv } from './sign.ts';
 import { Boards, checkGame, cleanInitials, dealtCards, GameError, Games, issueDeal, playable, readShare, shareToken, winner } from './scores.ts';
 import { matchImage, shareImage } from './share-image.ts';
 import { cleanName, Matches } from './match.ts';
+import { Tally } from './tally.ts';
 import { isOffensive } from './names.ts';
-import { cleanSetup, deal, formatScore, HOW_EXAMPLES, isRanked, jevAnswerMessage, RANKED, solutionOf } from '../shared/game.ts';
+import { cleanSetup, deal, formatScore, HOW_EXAMPLES, isRanked, jevAnswerMessage, MODES, RANKED, solutionOf } from '../shared/game.ts';
 
 const MAX_BODY = 10_000;
 /** Asks per second one visitor may make: a game asks at most a few. */
@@ -54,9 +56,13 @@ const MARK_BURST = 30;
 /** Entries a visitor may put on the boards per hour, refused ones included. */
 const ENTRIES_PER_HOUR = 20;
 
-export function createApi(env: Env & SignEnv & { TRUST_PROXY?: string; PROXY_SECRET?: string; PUBLIC_ORIGIN?: string }, root = join(import.meta.dirname, '..'), publicDir = 'public') {
+export function createApi(env: Env & SignEnv & { TRUST_PROXY?: string; PROXY_SECRET?: string; PUBLIC_ORIGIN?: string; BOARDS?: string }, root = join(import.meta.dirname, '..'), publicDir = 'public') {
   const sign = signer(loadSecret(env, root));
   const boards = new Boards(dataDir(env, root));
+  const tally = new Tally(dataDir(env, root));
+  // BOARDS=off closes the leaderboards: no entries, and the page hides them. What is on them stays kept.
+  const closed = env.BOARDS === 'off';
+  const view = () => ({ ...(closed ? { order: MODES, boards: Object.fromEntries(MODES.map((m) => [m, []])), closed } : boards.view()), tally: tally.view() });
   const games = new Games();
   const entries = new Map<string, number[]>();
   let matches: Matches | undefined;
@@ -156,6 +162,7 @@ export function createApi(env: Env & SignEnv & { TRUST_PROXY?: string; PROXY_SEC
         return ask(card, await cardPng(join(root, publicDir), card), findModel(DEFAULT_MODEL)!, env);
       },
       async (r) => (await taunt({ mode: 'versus', cards: 10, ...r }, findModel(DEFAULT_MODEL)!, env)).choice,
+      (w) => tally.count(w),
     );
     const send = (status: number, body: unknown) => {
       res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
@@ -198,7 +205,7 @@ export function createApi(env: Env & SignEnv & { TRUST_PROXY?: string; PROXY_SEC
           const name = cleanName(body.name);
           if (!name) throw new JevError(400, 'a name is 1 to 12 letters, digits or spaces');
           await refuseOffensive(name);
-          send(200, matches.create(name));
+          send(200, matches.create(name, visitor(req)));
         } else if (action === 'join') {
           const name = cleanName(body.name);
           if (!name) throw new JevError(400, 'a name is 1 to 12 letters, digits or spaces');
@@ -260,14 +267,14 @@ export function createApi(env: Env & SignEnv & { TRUST_PROXY?: string; PROXY_SEC
         return true;
       }
       if (url.pathname === '/api/highscores' && req.method === 'GET') {
-        send(200, boards.view());
+        send(200, view());
         return true;
       }
       const shareMatch = url.pathname.match(/^\/api\/share\/([A-Za-z0-9_.-]{10,600})$/);
       if (shareMatch && req.method === 'GET') {
         const shared = readShare(sign, shareMatch[1]);
         if (!shared) throw new JevError(404, 'this link is not valid');
-        send(200, { result: shared, ...boards.view() });
+        send(200, { result: shared, ...view() });
         return true;
       }
       if (url.pathname === '/api/result' && req.method === 'POST') {
@@ -291,6 +298,9 @@ export function createApi(env: Env & SignEnv & { TRUST_PROXY?: string; PROXY_SEC
           if (e instanceof GameError) throw new JevError(422, `That game did not check out: ${e.message}`);
           throw e;
         }
+        // The page sends a finished game at least once, so every game with Jev's whole side counts toward the tally.
+        const won = winner(game);
+        if (won) tally.count(won, game.dealId);
         let place: number | null = null;
         let initials = '';
         if (body.initials !== undefined && body.initials !== '') {
@@ -299,6 +309,7 @@ export function createApi(env: Env & SignEnv & { TRUST_PROXY?: string; PROXY_SEC
           initials = clean;
         }
         if (body.enter === true) {
+          if (closed) throw new JevError(409, 'the leaderboards are closed for now');
           if (!initials) throw new JevError(400, 'initials are three letters, A to Z');
           await refuseOffensive(initials);
           const clean = initials;
@@ -316,7 +327,7 @@ export function createApi(env: Env & SignEnv & { TRUST_PROXY?: string; PROXY_SEC
           }
         }
         const share = shareToken(sign, { mode: game.mode, limitMs: game.mode === 'versus' ? game.setup.limitMs : 0, score: game.score, right: game.right, cards: game.cards, initials, jev: game.jev, taunt: game.taunt, at: Date.now() });
-        send(200, { mode: game.mode, ranked: game.ranked, score: game.score, right: game.right, cards: game.cards, jev: game.jev, place, wouldPlace: game.ranked ? boards.placeFor(game.mode, game.score) : null, share: `/r/${share}`, ...boards.view() });
+        send(200, { mode: game.mode, ranked: game.ranked, score: game.score, right: game.right, cards: game.cards, jev: game.jev, place, wouldPlace: game.ranked && !closed ? boards.placeFor(game.mode, game.score) : null, share: `/r/${share}`, ...view() });
         return true;
       }
       if ((url.pathname === '/api/ask' || url.pathname === '/api/taunt') && req.method === 'POST') {

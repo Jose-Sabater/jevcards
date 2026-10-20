@@ -28,8 +28,11 @@ const FIRST_CARD_MS = 4_500;
 const REVEAL_MS = 5_000;
 const MAX_PLAYERS = 12;
 const MAX_ROOMS = 300;
-/** A room with nobody watching for this long is closed. */
+/** Open rooms one visitor may have made: enough for a few groups, too few to fill the server. */
+const MAX_ROOMS_EACH = 5;
+/** A room with nobody watching for this long is closed; a lobby sooner, since a waiting lobby polls. */
 const IDLE_MS = 30 * 60 * 1000;
+const LOBBY_IDLE_MS = 5 * 60 * 1000;
 /** No one reads a card and answers in under 150 ms. */
 const MIN_MS = 150;
 /** How long a poll waits for a change. */
@@ -77,6 +80,8 @@ export interface JevAsk {
 export interface JevTaunt {
   (r: { winner: 'jev' | 'person' | 'draw'; person: number; jev: number; personRight: number; jevRight: number }): Promise<string | null>;
 }
+/** Hears who won each finished match (Jev's tally). */
+export type MatchResult = (winner: 'jev' | 'person' | 'draw') => void;
 
 interface Room {
   code: string;
@@ -91,6 +96,8 @@ interface Room {
   taunt: string | null;
   timer?: NodeJS.Timeout;
   touched: number;
+  /** Who made the room (the visitor's address), for MAX_ROOMS_EACH. */
+  owner: string;
   matchNo: number;
   version: number;
 }
@@ -112,20 +119,24 @@ export class Matches {
   private deck: () => Promise<Map<string, Card>>;
   private askJev: JevAsk;
   private taunt: JevTaunt;
+  private result: MatchResult;
 
-  constructor(deck: () => Promise<Map<string, Card>>, askJev: JevAsk, taunt: JevTaunt) {
+  constructor(deck: () => Promise<Map<string, Card>>, askJev: JevAsk, taunt: JevTaunt, result: MatchResult = () => {}) {
     this.deck = deck;
     this.askJev = askJev;
     this.taunt = taunt;
+    this.result = result;
     setInterval(() => this.sweep(), 60_000).unref();
   }
 
-  create(name: string): { code: string; token: string } {
-    if (this.rooms.size >= MAX_ROOMS) this.sweep();
+  create(name: string, owner = ''): { code: string; token: string } {
+    const owned = () => [...this.rooms.values()].filter((r) => r.owner === owner).length;
+    if (this.rooms.size >= MAX_ROOMS || (owner && owned() >= MAX_ROOMS_EACH)) this.sweep();
     if (this.rooms.size >= MAX_ROOMS) throw new JevError(503, 'too many matches right now, try again soon');
+    if (owner && owned() >= MAX_ROOMS_EACH) throw new JevError(429, `you have ${MAX_ROOMS_EACH} matches open already; play or leave one first`);
     let code = newCode();
     while (this.rooms.has(code)) code = newCode();
-    const room: Room = { code, host: '', phase: 'lobby', players: new Map(), jevScore: 0, jevRight: 0, cards: [], round: null, rounds: MATCH_CARDS, taunt: null, touched: Date.now(), matchNo: 0, version: 0 };
+    const room: Room = { code, host: '', phase: 'lobby', players: new Map(), jevScore: 0, jevRight: 0, cards: [], round: null, rounds: MATCH_CARDS, taunt: null, touched: Date.now(), owner, matchNo: 0, version: 0 };
     this.rooms.set(code, room);
     const p = this.addPlayer(room, name);
     room.host = p.id;
@@ -312,6 +323,7 @@ export class Matches {
     const players = [...room.players.values()];
     const best = players.reduce((m, p) => Math.max(m, p.score), 0);
     const winner = room.jevScore > best ? 'jev' : room.jevScore === best ? 'draw' : 'person';
+    this.result(winner);
     const match = room.matchNo;
     const line = await this.taunt({ winner, person: best, jev: room.jevScore, personRight: 0, jevRight: room.jevRight }).catch(() => null);
     if (room.matchNo !== match || room.phase !== 'final') return;
@@ -432,7 +444,7 @@ export class Matches {
   private sweep(): void {
     const now = Date.now();
     for (const [code, room] of this.rooms) {
-      if (this.connected(room).length === 0 && now - room.touched > IDLE_MS) {
+      if (this.connected(room).length === 0 && now - room.touched > (room.phase === 'lobby' ? LOBBY_IDLE_MS : IDLE_MS)) {
         clearTimeout(room.timer);
         this.rooms.delete(code);
       }

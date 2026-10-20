@@ -16,6 +16,18 @@ export interface BoardEntry {
 export interface BoardsView {
   order: Mode[];
   boards: Record<Mode, BoardEntry[]>;
+  /** The leaderboards are closed (BOARDS=off on the server): the page hides them. */
+  closed?: boolean;
+  /** Jev's record over every finished game against it. */
+  tally?: { jev: number; person: number; draw: number };
+}
+
+/** "Jev has won 1,204 of 1,980 games", or null before any game has counted. */
+export function tallyLine(view: BoardsView): string | null {
+  const t = view.tally;
+  const games = t ? t.jev + t.person + t.draw : 0;
+  if (!t || !games) return null;
+  return `Jev has won ${t.jev.toLocaleString('en-US')} of ${games.toLocaleString('en-US')} ${games === 1 ? 'game' : 'games'}`;
 }
 export interface CheckedResult extends BoardsView {
   mode: Mode;
@@ -99,6 +111,7 @@ export function rankedPanel(record: GameRecord, taunt: () => string): HTMLElemen
   const table = el('ol', { className: 'lb-table' });
   const form = el('form', { className: 'lb-form', hidden: true });
   const shareRow = el('div', { className: 'lb-share', hidden: true });
+  const tally = el('p', { className: 'jev-tally', hidden: true });
   const badge = el('span', { className: 'lb-badge' }, `${RANKED[mode].label} leaderboard`);
   const meta = el('span', { className: 'lb-meta' }, lowerIsBetter(mode) ? 'fastest first' : 'highest first');
   const panel = el(
@@ -109,6 +122,7 @@ export function rankedPanel(record: GameRecord, taunt: () => string): HTMLElemen
     form,
     table,
     shareRow,
+    tally,
   );
   let entered = '';
 
@@ -119,7 +133,17 @@ export function rankedPanel(record: GameRecord, taunt: () => string): HTMLElemen
 
   postResult(record.recording, '', false).then(
     (r) => {
-      if (!r.ranked) {
+      const line = tallyLine(r);
+      if (line) {
+        tally.textContent = `${line}, this one included.`;
+        tally.hidden = false;
+      }
+      if (r.closed) {
+        badge.textContent = 'Your game';
+        meta.textContent = '';
+        status.textContent = `Checked: ${formatScore(mode, r.score)}.`;
+        table.hidden = true;
+      } else if (!r.ranked) {
         // Custom settings: checked and shareable, but the boards are for the standard game only.
         panel.classList.add('unranked');
         badge.textContent = 'Your game';

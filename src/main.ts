@@ -18,7 +18,7 @@ import { TAUNTS } from '../server/taunt-lines.ts';
 import { el, secs, shuffle, sleep, store } from './dom.ts';
 import { CardView, type PlayerAnswer } from './view.ts';
 import { beep, effect, hush, jevSays, prefs, say, setPref, unlock } from './sound.ts';
-import { boardsBlock, GameRecord, getBoards, getDeal, getShare, rankedPanel } from './ranked.ts';
+import { boardsBlock, GameRecord, getBoards, getDeal, getShare, rankedPanel, tallyLine } from './ranked.ts';
 import { matchMenu, openMatchLink, type MatchContext } from './match.ts';
 import { howItWorks } from './how.ts';
 import { formatScore, RANKED, SPRINT_CARDS, VERSUS_LIMITS, type Mode } from '../shared/game.ts';
@@ -135,6 +135,17 @@ function home() {
     return el('label', { className: 'setting' }, el('span', {}, label), s);
   };
   const n = playable().length;
+  // Jev's record, and the Leaderboards link unless the boards are closed: both from the server, filled in once known.
+  const tally = el('p', { className: 'jev-tally', hidden: true });
+  const boardsLink = el('div', { className: 'home-links' }, linkButton('Leaderboards', leaderboards));
+  getBoards().then(
+    (v) => {
+      const line = tallyLine(v);
+      if (line) (tally.textContent = `${line} so far`), (tally.hidden = false);
+      boardsLink.hidden = !!v.closed;
+    },
+    () => undefined,
+  );
   // Three cards from different categories, fanned out on stage.
   const fan = shuffle([...new Map(shuffle(deck).map((c) => [c.category, c])).values()]).slice(0, 3);
   screen(
@@ -151,6 +162,7 @@ function home() {
         linkButton('How does Jev see the cards?', showHow),
       ),
       el('div', { className: 'contestants' }, el('span', { className: 'podium-mini you' }, 'You'), el('span', { className: 'vs' }, 'vs'), el('span', { className: 'podium-mini jev' }, modelName())),
+      tally,
       el(
         'div',
         { className: 'modes' },
@@ -166,7 +178,7 @@ function home() {
         select('Sprint cards', settings.sprintCards, [[5, '5'], [10, '10'], [20, '20'], [999, 'All']], (v) => ((settings.sprintCards = v), home())),
         select('Versus seconds', settings.versusSeconds, [[3, '3 s'], [5, '5 s'], [10, '10 s'], [15, '15 s']], (v) => ((settings.versusSeconds = v), home())),
       ),
-      el('div', { className: 'home-links' }, linkButton('Leaderboards', leaderboards)),
+      boardsLink,
       el('div', { className: 'settings sound' }, soundSwitch('music', 'Music'), soundSwitch('effects', 'Effects'), soundSwitch('host', 'Voices')),
       el('p', { className: 'footnote' }, `${modelName()} is a decision model: it reads the picture and the question and returns a probability for every option (or a box, for "tap the place" cards) in one call. It never writes text.`),
       signature(),
@@ -216,9 +228,21 @@ async function leaderboards() {
   screen(topbar('Leaderboards'), el('main', { className: 'play' }, body));
   try {
     const view = await getBoards();
+    const line = tallyLine(view);
+    if (view.closed) {
+      body.replaceChildren(
+        el('h1', { className: 'result-title' }, 'Leaderboards'),
+        el('p', { className: 'footnote' }, 'The leaderboards are closed for now. Games still count toward Jev\'s record.'),
+        ...(line ? [el('p', { className: 'jev-tally' }, line)] : []),
+        again(home, 'Play'),
+        signature(),
+      );
+      return;
+    }
     body.replaceChildren(
       el('h1', { className: 'result-title' }, 'Leaderboards'),
       el('p', { className: 'footnote' }, `Ranked games: Sprint with ${RANKED.sprint.cards} cards, Versus at ${RANKED.versus.limitMs / 1000} s, against Jev 1.14. Every score is checked by the server.`),
+      ...(line ? [el('p', { className: 'jev-tally' }, line)] : []),
       boardsBlock(view),
       again(home, 'Play'),
       signature(),
@@ -269,7 +293,7 @@ async function sharePage(token: string) {
     ...(taunt ? [el('section', { className: 'last-word done' }, el('div', { className: 'lw-head' }, el('span', { className: 'lw-badge' }, `${jevName} said`)), el('p', { className: 'lw-quote' }, `"${taunt.text}"`))] : []),
     el('div', { className: 'actions play-row' }, play),
     el('p', { className: 'footnote' }, 'A visual quiz: tap the right thing in each picture, faster than Jev, a decision model that answers in about 0.3 s.'),
-    boardsBlock(shared, r.mode),
+    ...(shared.closed ? [] : [boardsBlock(shared, r.mode)]),
     again(toHome, 'All games'),
     signature(),
   );
