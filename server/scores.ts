@@ -77,7 +77,7 @@ export class Games {
    * (a retry after a dropped connection) gets the same mark. A time under the minimum counts as the minimum, and
    * one over the limit as the limit, so a stray double tap or a slow timer does not spoil the game.
    */
-  mark(s: Signer, deck: Map<string, Card>, token: unknown, index: number, a: { card?: unknown; option?: unknown; point?: unknown; ms?: unknown }, now = Date.now()): { right: boolean; solution: Solution } {
+  mark(s: Signer, deck: Map<string, Card>, token: unknown, index: number, a: { card?: unknown; option?: unknown; point?: unknown; ms?: unknown }, now = Date.now()): { right: boolean; solution: Solution; fresh: boolean; dealId: string; mode: Mode; ms: number } {
     const { d, ids } = dealtCards(s, deck, token, now);
     if (!Number.isInteger(index) || index < 0 || index >= ids.length || a.card !== ids[index]) throw new GameError('that is not the card dealt here');
     const point = Array.isArray(a.point) && a.point.length === 2 && a.point.every((v) => typeof v === 'number' && v >= 0 && v <= 1) ? (a.point as [number, number]) : undefined;
@@ -91,7 +91,7 @@ export class Games {
     const before = game.answers[index];
     if (before) {
       if (before.option !== answer.option || String(before.point) !== String(answer.point)) throw new GameError('that card is already answered');
-      return { right: isRight(card, before), solution: solutionOf(card) };
+      return { right: isRight(card, before), solution: solutionOf(card), fresh: false, dealId: d.id, mode: d.setup.mode, ms: before.ms };
     }
     if (index !== game.answers.length) throw new GameError(index > game.answers.length ? 'an earlier card has no answer (the server may have restarted)' : 'that card is already answered');
     if (d.setup.mode === 'streak' && game.answers.some((x) => !isRight(deck.get(x.card)!, x))) throw new GameError('the streak is over');
@@ -102,7 +102,7 @@ export class Games {
       this.sweep(now);
       this.games.set(d.id, game);
     }
-    return { right: isRight(card, answer), solution: solutionOf(card) };
+    return { right: isRight(card, answer), solution: solutionOf(card), fresh: true, dealId: d.id, mode: d.setup.mode, ms };
   }
 
   /** The answers marked for a deal so far, or null when the server has none (an unknown or lost game). */

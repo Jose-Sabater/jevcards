@@ -80,8 +80,13 @@ export interface JevAsk {
 export interface JevTaunt {
   (r: { winner: 'jev' | 'person' | 'draw'; person: number; jev: number; personRight: number; jevRight: number }): Promise<string | null>;
 }
-/** Hears who won each finished match (Jev's tally). */
-export type MatchResult = (winner: 'jev' | 'person' | 'draw') => void;
+/** What happens in matches, for Jev's tally and the play log. `match` tells one match from another. */
+export interface MatchEvents {
+  /** A card was revealed: each player's answer (null when they gave none), and Jev's (null when it failed). */
+  round?(e: { match: string; card: string; players: ({ right: boolean; ms: number } | null)[]; jev: { right: boolean; ms: number } | null }): void;
+  /** A match finished. */
+  result?(e: { match: string; winner: 'jev' | 'person' | 'draw'; rounds: number; players: number; best: number; jev: { score: number; right: number } }): void;
+}
 
 interface Room {
   code: string;
@@ -119,13 +124,13 @@ export class Matches {
   private deck: () => Promise<Map<string, Card>>;
   private askJev: JevAsk;
   private taunt: JevTaunt;
-  private result: MatchResult;
+  private events: MatchEvents;
 
-  constructor(deck: () => Promise<Map<string, Card>>, askJev: JevAsk, taunt: JevTaunt, result: MatchResult = () => {}) {
+  constructor(deck: () => Promise<Map<string, Card>>, askJev: JevAsk, taunt: JevTaunt, events: MatchEvents = {}) {
     this.deck = deck;
     this.askJev = askJev;
     this.taunt = taunt;
-    this.result = result;
+    this.events = events;
     setInterval(() => this.sweep(), 60_000).unref();
   }
 
@@ -310,6 +315,12 @@ export class Matches {
     r.revealed = true;
     clearTimeout(room.timer);
     this.broadcast(room);
+    this.events.round?.({
+      match: `${room.code}.${room.matchNo}`,
+      card: r.card,
+      players: [...room.players.keys()].map((id) => r.answers.get(id) ?? null).map((a) => a && { right: a.right, ms: a.ms }),
+      jev: r.jev ? { right: r.jev.right, ms: r.jev.ms } : null,
+    });
     room.timer = setTimeout(() => {
       if (r.index + 1 < room.cards.length) this.openRound(room, r.index + 1, Date.now() + 600);
       else void this.finish(room);
@@ -323,7 +334,7 @@ export class Matches {
     const players = [...room.players.values()];
     const best = players.reduce((m, p) => Math.max(m, p.score), 0);
     const winner = room.jevScore > best ? 'jev' : room.jevScore === best ? 'draw' : 'person';
-    this.result(winner);
+    this.events.result?.({ match: `${room.code}.${room.matchNo}`, winner, rounds: room.cards.length, players: players.length, best, jev: { score: room.jevScore, right: room.jevRight } });
     const match = room.matchNo;
     const line = await this.taunt({ winner, person: best, jev: room.jevScore, personRight: 0, jevRight: room.jevRight }).catch(() => null);
     if (room.matchNo !== match || room.phase !== 'final') return;

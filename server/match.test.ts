@@ -90,10 +90,11 @@ test('one visitor may keep 5 rooms open, and a lobby nobody watches closes after
   }
 });
 
-test('a finished match is counted toward Jev\'s tally', async (t) => {
+test('a finished match is counted toward Jev\'s tally, and every card is logged', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: Date.now() });
   const results: string[] = [];
-  const m = new Matches(async () => deck, async () => ({ correct: true, latencyMs: 300 }), async () => null, (w) => results.push(w));
+  const rounds: { players: unknown[]; jev: unknown }[] = [];
+  const m = new Matches(async () => deck, async () => ({ correct: true, latencyMs: 300 }), async () => null, { result: (e) => results.push(e.winner), round: (e) => rounds.push(e) });
   const host = m.create('AAA');
   m.setRounds(host.code, host.token, 5);
   await m.start(host.code, host.token);
@@ -102,4 +103,6 @@ test('a finished match is counted toward Jev\'s tally', async (t) => {
     await new Promise((r) => setImmediate(r));
   }
   assert.deepEqual(results, ['jev'], 'Jev answered every card right; the host none');
+  assert.equal(rounds.length, 5, 'every card is logged');
+  assert.deepEqual([rounds[0].players, rounds[0].jev], [[null], { right: true, ms: 300 }], 'the host gave no answer; Jev was right');
 });

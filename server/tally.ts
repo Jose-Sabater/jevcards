@@ -34,19 +34,20 @@ export class Tally {
     return { ...this.counts };
   }
 
-  /** Counts a finished game, once per `id` when it has one. */
-  count(outcome: Outcome, id?: string, now = Date.now()): void {
+  /** Counts a finished game, once per `id` when it has one. True when it counted (not seen before). */
+  count(outcome: Outcome, id?: string, now = Date.now()): boolean {
     if (id) {
       if (now - this.swept > 60_000) {
         this.swept = now;
         for (const [k, at] of this.seen) if (now - at > DEAL_TTL_MS) this.seen.delete(k);
       }
-      if (this.seen.has(id)) return;
+      if (this.seen.has(id)) return false;
       this.seen.set(id, now);
     }
     this.counts[outcome]++;
     const tmp = `${this.file}.${process.pid}.tmp`;
     writeFileSync(tmp, JSON.stringify(this.counts));
     renameSync(tmp, this.file);
+    return true;
   }
 }

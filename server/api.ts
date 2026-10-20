@@ -38,6 +38,7 @@ import { dataDir, loadSecret, signer, type SignEnv } from './sign.ts';
 import { Boards, checkGame, cleanInitials, dealtCards, GameError, Games, issueDeal, playable, readShare, shareToken, winner } from './scores.ts';
 import { matchImage, shareImage } from './share-image.ts';
 import { cleanName, Matches } from './match.ts';
+import { Stats } from './stats.ts';
 import { Tally } from './tally.ts';
 import { isOffensive } from './names.ts';
 import { cleanSetup, deal, formatScore, HOW_EXAMPLES, isRanked, jevAnswerMessage, MODES, RANKED, solutionOf } from '../shared/game.ts';
@@ -60,6 +61,9 @@ export function createApi(env: Env & SignEnv & { TRUST_PROXY?: string; PROXY_SEC
   const sign = signer(loadSecret(env, root));
   const boards = new Boards(dataDir(env, root));
   const tally = new Tally(dataDir(env, root));
+  const stats = new Stats(dataDir(env, root));
+  /** A game's id in the play log: one-way, so a log line cannot be turned back into a deal or a match code. */
+  const gameId = (id: string) => sign.hash('stats', id);
   // BOARDS=off closes the leaderboards: no entries, and the page hides them. What is on them stays kept.
   const closed = env.BOARDS === 'off';
   const view = () => ({ ...(closed ? { order: MODES, boards: Object.fromEntries(MODES.map((m) => [m, []])), closed } : boards.view()), tally: tally.view() });
@@ -162,7 +166,19 @@ export function createApi(env: Env & SignEnv & { TRUST_PROXY?: string; PROXY_SEC
         return ask(card, await cardPng(join(root, publicDir), card), findModel(DEFAULT_MODEL)!, env);
       },
       async (r) => (await taunt({ mode: 'versus', cards: 10, ...r }, findModel(DEFAULT_MODEL)!, env)).choice,
-      (w) => tally.count(w),
+      {
+        round: (e) => {
+          void loadDeck().then((deck) => {
+            const base = { type: 'answer', game: gameId(e.match), mode: 'match', card: e.card, category: deck.get(e.card)?.category, match: true };
+            for (const a of e.players) stats.write({ ...base, who: 'person', right: a?.right ?? false, ms: a?.ms ?? null });
+            if (e.jev) stats.write({ ...base, who: 'jev', right: e.jev.right, ms: e.jev.ms });
+          });
+        },
+        result: (e) => {
+          tally.count(e.winner);
+          stats.write({ type: 'game', game: gameId(e.match), mode: 'match', match: true, cards: e.rounds, players: e.players, best: e.best, jev: e.jev, winner: e.winner });
+        },
+      },
     );
     const send = (status: number, body: unknown) => {
       res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
@@ -259,7 +275,13 @@ export function createApi(env: Env & SignEnv & { TRUST_PROXY?: string; PROXY_SEC
           throw e instanceof JevError ? e : new JevError(400, 'body is not JSON');
         }
         try {
-          send(200, games.mark(sign, await loadDeck(), body.deal, Number(body.index), body));
+          const deck = await loadDeck();
+          const m = games.mark(sign, deck, body.deal, Number(body.index), body);
+          if (m.fresh) {
+            const card = deck.get(String(body.card));
+            stats.write({ type: 'answer', game: gameId(m.dealId), mode: m.mode, card: card?.id, category: card?.category, who: 'person', right: m.right, ms: m.ms });
+          }
+          send(200, { right: m.right, solution: m.solution });
         } catch (e) {
           if (e instanceof GameError) throw new JevError(409, e.message);
           throw e;
@@ -300,7 +322,9 @@ export function createApi(env: Env & SignEnv & { TRUST_PROXY?: string; PROXY_SEC
         }
         // The page sends a finished game at least once, so every game with Jev's whole side counts toward the tally.
         const won = winner(game);
-        if (won) tally.count(won, game.dealId);
+        if (won && tally.count(won, game.dealId)) {
+          stats.write({ type: 'game', game: gameId(game.dealId), mode: game.mode, cards: game.cards, limitMs: game.setup.limitMs, box: game.setup.box, ranked: game.ranked, score: game.score, right: game.right, jev: game.jev, winner: won });
+        }
         let place: number | null = null;
         let initials = '';
         if (body.initials !== undefined && body.initials !== '') {
@@ -350,16 +374,20 @@ export function createApi(env: Env & SignEnv & { TRUST_PROXY?: string; PROXY_SEC
         const deck = await loadDeck();
         const card = typeof body.card === 'string' ? deck.get(body.card) : undefined;
         if (!card) throw new JevError(404, 'no such card');
+        // The game this card is in, for the play log; none for the how page's examples.
+        let game: { id: string; mode: string } | null = null;
         if (!HOW_EXAMPLES.includes(card.id)) {
-          let ids: string[];
+          let dealt: ReturnType<typeof dealtCards>;
           try {
-            ids = dealtCards(sign, deck, body.deal).ids;
+            dealt = dealtCards(sign, deck, body.deal);
           } catch (e) {
             throw e instanceof GameError ? new JevError(409, e.message) : e;
           }
-          if (!ids.includes(card.id)) throw new JevError(409, 'that card is not in this game');
+          if (!dealt.ids.includes(card.id)) throw new JevError(409, 'that card is not in this game');
+          game = { id: dealt.d.id, mode: dealt.d.setup.mode };
         }
         const a = await ask(card, await cardPng(join(root, publicDir), card), model, env);
+        if (game) stats.write({ type: 'answer', game: gameId(game.id), mode: game.mode, card: card.id, category: card.category, who: 'jev', right: a.correct, ms: a.latencyMs, model: model.id });
         // Signed, so a share link can show Jev's side without trusting the page.
         const signed = { card: card.id, correct: a.correct, latencyMs: a.latencyMs, model: model.id };
         send(200, { ...a, signed: { ...signed, sig: sign.sign('answer', jevAnswerMessage(signed)) } });

@@ -84,7 +84,8 @@ createServer(async (req, res) => {
     }
     res.writeHead(200, {
       'Content-Type': types[extname(file)] ?? 'application/octet-stream',
-      'Cache-Control': file.includes('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache',
+      // Built files are named by their content; card pictures may be rebuilt, so an hour; the page itself every time.
+      'Cache-Control': file.includes('/assets/') ? 'public, max-age=31536000, immutable' : file.includes('/cards/') && file.endsWith('.png') ? 'public, max-age=3600' : 'no-cache',
     });
     res.end(body);
   } catch (e) {

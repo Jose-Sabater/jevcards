@@ -85,7 +85,7 @@ In production, `npm run build` then `npm start` serves the built page and the AP
 | `OPPER_API_KEY` | Calls Jev through the [Opper](https://opper.ai) gateway. Every question Jev answers is paid by this key (about $0.0001 a card). |
 | `TYPESAFE_API_KEY` | Or calls Jev on TypeSafe directly (with both keys set, `JEV_ROUTE=typesafe` picks this one). |
 | `SESSION_SECRET` | Signs deals, Jev's answers and share links. Set it in production; locally one is made in `DATA_DIR/secret`. |
-| `DATA_DIR` | Where the leaderboards and Jev's tally of wins (`tally.json`) are kept (default `data/`). Mount a volume here. |
+| `DATA_DIR` | Where the leaderboards, Jev's tally of wins (`tally.json`) and the play log (`stats.jsonl`: one line per answer and per finished game, no addresses or names; see `server/stats.ts`) are kept (default `data/`). Mount a volume here. |
 | `BOARDS` | `off` closes the leaderboards: no new entries, and the page hides them. What is on them is kept for when they open again. |
 | `TRUST_PROXY` | `1` behind a proxy, so the visitor's address comes from `X-Forwarded-For`. |
 | `PUBLIC_ORIGIN` | The site's public address (`https://jevcards.com`), for link previews and the same-site check behind a proxy that rewrites the host. |
