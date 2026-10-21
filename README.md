@@ -1,5 +1,10 @@
 # Jev Cards
 
+> **Jev Cards v2 continues at Opper:** play it at
+> [opper.ai/decision-benchmarks/jevcards](https://opper.ai/decision-benchmarks/jevcards/). jevcards.com now goes
+> there. This repository stays the original, open-source version that launched on
+> [Show HN](https://news.ycombinator.com/item?id=50167617) on 20 October 2026, and it still runs as it is: see below.
+
 A visual quiz game: you against Jev, TypeSafe's vision decision model, on the same picture cards. Tap the peach
 among the fruit, point at Egypt on a map, find the chess move that mates, say what color the ink is. Jev looks at
 the same picture and answers in about a quarter of a second.
